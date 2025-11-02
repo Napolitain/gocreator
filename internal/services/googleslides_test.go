@@ -27,7 +27,7 @@ func TestGoogleSlidesService_LoadFromGoogleSlides_MissingCredentials(t *testing.
 	service := NewGoogleSlidesService(fs, logger)
 
 	ctx := context.Background()
-	
+
 	// Test without credentials
 	slides, notes, err := service.LoadFromGoogleSlides(ctx, "test-presentation-id", "/test/output")
 
