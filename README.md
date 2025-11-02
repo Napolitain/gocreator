@@ -261,7 +261,6 @@ func TestSubtitleService_Generate(t *testing.T) {
 - **github.com/go-ole/go-ole** - COM support for Windows (Windows builds only)
 - **github.com/stretchr/testify** - Testing framework with mocking support
 - **google.golang.org/api** - Google Slides API client
-- **github.com/stretchr/testify** - Testing framework with mocking support
 
 ## Best Practices
 

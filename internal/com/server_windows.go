@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"gocreator/internal/adapters"
@@ -168,41 +169,18 @@ func parseLanguages(outputLangs, inputLang string) []string {
 	return append([]string{inputLang}, langs...)
 }
 
-// splitCommaSeparated splits a comma-separated string
+// splitCommaSeparated splits a comma-separated string and trims whitespace
 func splitCommaSeparated(s string) []string {
 	if s == "" {
 		return nil
 	}
 
-	var result []string
-	for i := 0; i < len(s); {
-		// Skip whitespace
-		for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
-			i++
-		}
-		if i >= len(s) {
-			break
-		}
-
-		// Find next comma or end
-		start := i
-		for i < len(s) && s[i] != ',' {
-			i++
-		}
-
-		// Trim trailing whitespace
-		end := i
-		for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-			end--
-		}
-
-		if end > start {
-			result = append(result, s[start:end])
-		}
-
-		// Skip comma
-		if i < len(s) {
-			i++
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
 		}
 	}
 	return result
