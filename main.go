@@ -70,7 +70,11 @@ func main() {
 	if _, err := os.Stat(slidesDir); os.IsNotExist(err) {
 		os.Mkdir(slidesDir, os.ModePerm)
 	}
-	files, _ := os.ReadDir(slidesDir)
+	files, err := os.ReadDir(slidesDir)
+	if err != nil {
+		logger.Error("Failed to read slides directory", "error", err)
+		os.Exit(1)
+	}
 	for _, file := range files {
 		if strings.ToLower(filepath.Ext(file.Name())) == ".png" ||
 			strings.ToLower(filepath.Ext(file.Name())) == ".jpg" ||

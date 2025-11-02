@@ -3,7 +3,7 @@ package utils
 import (
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 // IsSymlink checks if a file is a symlink
@@ -102,8 +102,8 @@ func CopyTree(src string, dst string, followSymlinks bool) error {
 			}
 			for _, child := range children {
 				// Path is current join child
-				childPath := path.Join(current, child.Name())
-				childDst := path.Join(currentDst, child.Name())
+				childPath := filepath.Join(current, child.Name())
+				childDst := filepath.Join(currentDst, child.Name())
 				stack = append(stack, [2]string{childPath, childDst})
 			}
 		}
