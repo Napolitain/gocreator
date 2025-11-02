@@ -27,6 +27,7 @@ go install github.com/Napolitain/gocreator/cmd/gocreator@latest
 
 - Automated video creation from slides and text
 - **Google Slides API integration** - Fetch slides and speaker notes directly from Google Slides
+- **COM Interface** - Windows COM support for integration with VBA, PowerShell, C#, and other COM-compatible languages
 - Multi-language support with AI-powered translation
 - Text-to-speech audio generation
 - Intelligent caching to reduce API costs
@@ -66,6 +67,20 @@ https://docs.google.com/presentation/d/[PRESENTATION_ID]/edit
 - All content is cached for efficient re-generation
 
 📖 **See [GOOGLE_SLIDES_GUIDE.md](GOOGLE_SLIDES_GUIDE.md) for detailed setup instructions and troubleshooting.**
+
+### Using COM Interface (Windows only)
+
+GoCreator provides a COM interface for integration with Windows applications:
+
+```bash
+# Check COM availability
+gocreator com info
+
+# Register COM server (Windows only)
+gocreator com register
+```
+
+📖 **See [COM_INTERFACE.md](COM_INTERFACE.md) for detailed COM usage and programming examples.**
 
 ## Versioning
 
@@ -182,6 +197,7 @@ gocreator/
 ├── internal/
 │   ├── adapters/           # External API adapters
 │   ├── cli/                # CLI commands
+│   ├── com/                # COM interface (Windows only)
 │   ├── interfaces/         # Interface definitions
 │   ├── mocks/             # Mock implementations for testing
 │   └── services/          # Business logic
@@ -194,6 +210,7 @@ gocreator/
 │       ├── video.go       # Video generation
 │       └── *_test.go      # Unit tests
 ├── CACHE_POLICY.md        # Cache strategy documentation
+├── COM_INTERFACE.md       # COM interface documentation
 └── go.mod
 ```
 
@@ -241,6 +258,9 @@ func TestSubtitleService_Generate(t *testing.T) {
 - **github.com/spf13/afero** - Filesystem abstraction (enables easy testing)
 - **github.com/openai/openai-go** - OpenAI API client
 - **github.com/patrickmn/go-cache** - In-memory cache with expiration
+- **github.com/go-ole/go-ole** - COM support for Windows (Windows builds only)
+- **github.com/stretchr/testify** - Testing framework with mocking support
+- **google.golang.org/api** - Google Slides API client
 - **github.com/stretchr/testify** - Testing framework with mocking support
 
 ## Best Practices
