@@ -123,28 +123,39 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 		// Video determines the duration, audio is aligned at the start
 		s.logger.Debug("Processing video input", "path", slidePath)
 
+		// Get video duration to use as the final duration
+		videoDuration, err := s.getVideoDuration(slidePath)
+		if err != nil {
+			return fmt.Errorf("failed to get video duration: %w", err)
+		}
+
 		if targetWidth != iw || targetHeight != ih {
 			// Need to scale and pad video
 			scaleFilter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", targetWidth, targetHeight)
 			padFilter := fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1", targetWidth, targetHeight)
-			filterComplex := fmt.Sprintf("%s,%s", scaleFilter, padFilter)
+			filterComplex := fmt.Sprintf("[0:v]%s,%s[v]", scaleFilter, padFilter)
 
-			cmd = exec.Command("ffmpeg", "-y", "-i", slidePath, "-i", audioPath,
-				"-vf", filterComplex,
+			// Use video duration as primary, trim/pad audio to match
+			cmd = exec.Command("ffmpeg", "-y", 
+				"-t", fmt.Sprintf("%.2f", videoDuration), "-i", slidePath,
+				"-i", audioPath,
+				"-filter_complex", filterComplex,
+				"-map", "[v]", "-map", "1:a:0",
 				"-c:v", "libx264",
 				"-c:a", "mp3", "-b:a", "192k",
 				"-pix_fmt", "yuv420p",
-				"-map", "0:v:0", "-map", "1:a:0",
-				"-shortest",
+				"-t", fmt.Sprintf("%.2f", videoDuration),
 				outputPath)
 		} else {
 			// No scaling needed for video
-			cmd = exec.Command("ffmpeg", "-y", "-i", slidePath, "-i", audioPath,
+			cmd = exec.Command("ffmpeg", "-y",
+				"-t", fmt.Sprintf("%.2f", videoDuration), "-i", slidePath,
+				"-i", audioPath,
+				"-map", "0:v:0", "-map", "1:a:0",
 				"-c:v", "libx264",
 				"-c:a", "mp3", "-b:a", "192k",
 				"-pix_fmt", "yuv420p",
-				"-map", "0:v:0", "-map", "1:a:0",
-				"-shortest",
+				"-t", fmt.Sprintf("%.2f", videoDuration),
 				outputPath)
 		}
 	} else {
