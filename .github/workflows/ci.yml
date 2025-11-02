@@ -11,10 +11,6 @@ on:
       - main
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: go
-
 jobs:
   build:
     runs-on: ubuntu-latest
