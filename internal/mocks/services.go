@@ -87,3 +87,14 @@ func (m *MockSlideLoader) LoadSlides(ctx context.Context, dir string) ([]string,
 	}
 	return args.Get(0).([]string), args.Error(1)
 }
+
+func (m *MockSlideLoader) LoadFromGoogleSlides(ctx context.Context, presentationID, outputDir string) ([]string, []string, error) {
+	args := m.Called(ctx, presentationID, outputDir)
+	if args.Get(0) == nil {
+		return nil, nil, args.Error(2)
+	}
+	if args.Get(1) == nil {
+		return args.Get(0).([]string), nil, args.Error(2)
+	}
+	return args.Get(0).([]string), args.Get(1).([]string), args.Error(2)
+}

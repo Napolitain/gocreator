@@ -12,9 +12,10 @@ import (
 
 // VideoCreatorConfig holds configuration for video creation
 type VideoCreatorConfig struct {
-	RootDir     string
-	InputLang   string
-	OutputLangs []string
+	RootDir        string
+	InputLang      string
+	OutputLangs    []string
+	GoogleSlidesID string // Google Slides presentation ID (found in the URL). When empty, uses local slides; when provided, fetches from Google Slides API
 }
 
 // VideoCreator orchestrates the video creation process
@@ -53,23 +54,46 @@ func NewVideoCreator(
 func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) error {
 	dataDir := filepath.Join(cfg.RootDir, "data")
 
-	// Load input texts
-	textsPath := filepath.Join(dataDir, "texts.txt")
-	inputTexts, err := vc.textService.Load(ctx, textsPath)
-	if err != nil {
-		return fmt.Errorf("failed to load input texts: %w", err)
+	var inputTexts []string
+	var slides []string
+	var err error
+
+	// Check if using Google Slides
+	if cfg.GoogleSlidesID != "" {
+		// Fetch slides and notes from Google Slides
+		slidesDir := filepath.Join(dataDir, "slides")
+		slides, inputTexts, err = vc.slideService.LoadFromGoogleSlides(ctx, cfg.GoogleSlidesID, slidesDir)
+		if err != nil {
+			return fmt.Errorf("failed to load Google Slides: %w", err)
+		}
+		vc.logger.Info("Loaded from Google Slides", "slideCount", len(slides), "noteCount", len(inputTexts))
+
+		// Save the fetched notes as input texts for caching
+		textsPath := filepath.Join(dataDir, "texts.txt")
+		if err := vc.textService.Save(ctx, textsPath, inputTexts); err != nil {
+			// Saving fetched notes is only for caching purposes. It's acceptable to continue without saving,
+			// for example, if running on a read-only filesystem or if caching is not critical for correctness.
+			vc.logger.Warn("Failed to save fetched notes", "error", err)
+		}
+	} else {
+		// Load input texts from file
+		textsPath := filepath.Join(dataDir, "texts.txt")
+		inputTexts, err = vc.textService.Load(ctx, textsPath)
+		if err != nil {
+			return fmt.Errorf("failed to load input texts: %w", err)
+		}
+
+		vc.logger.Info("Loaded texts", "count", len(inputTexts))
+
+		// Load slides from directory
+		slidesDir := filepath.Join(dataDir, "slides")
+		slides, err = vc.slideService.LoadSlides(ctx, slidesDir)
+		if err != nil {
+			return fmt.Errorf("failed to load slides: %w", err)
+		}
+
+		vc.logger.Info("Loaded slides", "count", len(slides))
 	}
-
-	vc.logger.Info("Loaded texts", "count", len(inputTexts))
-
-	// Load slides
-	slidesDir := filepath.Join(dataDir, "slides")
-	slides, err := vc.slideService.LoadSlides(ctx, slidesDir)
-	if err != nil {
-		return fmt.Errorf("failed to load slides: %w", err)
-	}
-
-	vc.logger.Info("Loaded slides", "count", len(slides))
 
 	if len(slides) != len(inputTexts) {
 		return fmt.Errorf("slide and text count mismatch: %d slides, %d texts", len(slides), len(inputTexts))

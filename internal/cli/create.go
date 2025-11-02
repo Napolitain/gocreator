@@ -20,23 +20,25 @@ import (
 func NewCreateCommand() *cobra.Command {
 	var inputLang string
 	var outputLangs string
+	var googleSlidesID string
 
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create videos with translations",
 		Long:  `Create videos by processing text files, generating translations, audio, and combining with slides.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCreate(inputLang, outputLangs)
+			return runCreate(inputLang, outputLangs, googleSlidesID)
 		},
 	}
 
 	cmd.Flags().StringVarP(&inputLang, "lang", "l", "en", "Language of the text input")
 	cmd.Flags().StringVarP(&outputLangs, "langs-out", "o", "en", "Comma-separated list of output languages")
+	cmd.Flags().StringVar(&googleSlidesID, "google-slides", "", "Google Slides presentation ID (if using Google Slides instead of local slides)")
 
 	return cmd
 }
 
-func runCreate(inputLang, outputLangs string) error {
+func runCreate(inputLang, outputLangs, googleSlidesID string) error {
 	// Setup structured logging
 	slogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	logger := &interfaces.SlogLogger{Logger: slogger}
@@ -58,7 +60,16 @@ func runCreate(inputLang, outputLangs string) error {
 	translationService := services.NewTranslationService(openaiAdapter, logger)
 	audioService := services.NewAudioService(fs, openaiAdapter, textService, logger)
 	videoService := services.NewVideoService(fs, logger)
-	slideService := services.NewSlideService(fs, logger)
+	
+	// Choose slide service based on whether Google Slides ID is provided
+	var slideService interfaces.SlideLoader
+	if googleSlidesID != "" {
+		slideService = services.NewGoogleSlidesService(fs, logger)
+		logger.Info("Using Google Slides", "presentationID", googleSlidesID)
+	} else {
+		slideService = services.NewSlideService(fs, logger)
+		logger.Info("Using local slides")
+	}
 
 	// Create video creator
 	creator := services.NewVideoCreator(
@@ -76,9 +87,10 @@ func runCreate(inputLang, outputLangs string) error {
 
 	// Create configuration
 	cfg := services.VideoCreatorConfig{
-		RootDir:     rootDir,
-		InputLang:   inputLang,
-		OutputLangs: langsOut,
+		RootDir:        rootDir,
+		InputLang:      inputLang,
+		OutputLangs:    langsOut,
+		GoogleSlidesID: googleSlidesID,
 	}
 
 	// Run video creation

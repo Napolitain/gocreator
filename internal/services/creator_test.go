@@ -251,3 +251,85 @@ func TestVideoCreator_Create(t *testing.T) {
 		assert.Contains(t, err.Error(), "slide and text count mismatch")
 	})
 }
+
+func TestVideoCreator_Create_WithGoogleSlides(t *testing.T) {
+	t.Run("successful video creation with Google Slides", func(t *testing.T) {
+		// Setup mocks
+		fs := afero.NewMemMapFs()
+		mockText := new(mocks.MockTextProcessor)
+		mockTranslation := new(mocks.MockTranslator)
+		mockAudio := new(mocks.MockAudioGenerator)
+		mockVideo := new(mocks.MockVideoGenerator)
+		mockSlide := new(mocks.MockSlideLoader)
+		logger := &mockLogger{}
+
+		// Create test data directory structure
+		dataDir := "/test/data"
+		require.NoError(t, fs.MkdirAll(dataDir, 0755))
+
+		// Setup expectations for Google Slides
+		slides := []string{"/test/data/slides/slide_0.png", "/test/data/slides/slide_1.png"}
+		notes := []string{"Note 1", "Note 2"}
+		audioPaths := []string{"/test/data/cache/en/audio/0.mp3", "/test/data/cache/en/audio/1.mp3"}
+
+		mockSlide.On("LoadFromGoogleSlides", mock.Anything, "test-presentation-id", "/test/data/slides").
+			Return(slides, notes, nil)
+		mockText.On("Save", mock.Anything, "/test/data/texts.txt", notes).
+			Return(nil)
+		mockAudio.On("GenerateBatch", mock.Anything, notes, "/test/data/cache/en/audio").
+			Return(audioPaths, nil)
+		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, "/test/data/out/output-en.mp4").
+			Return(nil)
+
+		// Create service
+		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+
+		// Execute
+		cfg := VideoCreatorConfig{
+			RootDir:        "/test",
+			InputLang:      "en",
+			OutputLangs:    []string{"en"},
+			GoogleSlidesID: "test-presentation-id",
+		}
+		err := creator.Create(context.Background(), cfg)
+
+		// Assert
+		assert.NoError(t, err)
+		mockSlide.AssertExpectations(t)
+		mockText.AssertExpectations(t)
+		mockAudio.AssertExpectations(t)
+		mockVideo.AssertExpectations(t)
+	})
+
+	t.Run("Google Slides API error", func(t *testing.T) {
+		// Setup mocks
+		fs := afero.NewMemMapFs()
+		mockText := new(mocks.MockTextProcessor)
+		mockTranslation := new(mocks.MockTranslator)
+		mockAudio := new(mocks.MockAudioGenerator)
+		mockVideo := new(mocks.MockVideoGenerator)
+		mockSlide := new(mocks.MockSlideLoader)
+		logger := &mockLogger{}
+
+		// Setup expectations for Google Slides error
+		mockSlide.On("LoadFromGoogleSlides", mock.Anything, "invalid-id", "/test/data/slides").
+			Return(nil, nil, errors.New("API error"))
+
+		// Create service
+		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+
+		// Execute
+		cfg := VideoCreatorConfig{
+			RootDir:        "/test",
+			InputLang:      "en",
+			OutputLangs:    []string{"en"},
+			GoogleSlidesID: "invalid-id",
+		}
+		err := creator.Create(context.Background(), cfg)
+
+		// Assert
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load Google Slides")
+		mockSlide.AssertExpectations(t)
+	})
+}

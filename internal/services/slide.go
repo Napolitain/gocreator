@@ -62,3 +62,8 @@ func (s *SlideService) LoadSlides(ctx context.Context, dir string) ([]string, er
 
 	return slides, nil
 }
+
+// LoadFromGoogleSlides is not implemented for local slide service
+func (s *SlideService) LoadFromGoogleSlides(ctx context.Context, presentationID, outputDir string) ([]string, []string, error) {
+	return nil, nil, fmt.Errorf("LoadFromGoogleSlides not implemented for SlideService, use GoogleSlidesService instead")
+}
