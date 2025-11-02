@@ -8,14 +8,17 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-// CacheService manages in-memory caching for API calls and computations
+// CacheService manages in-memory caching with TTL for runtime data
+// This is NOT used for filesystem caches (translations, audio, video segments)
+// which persist indefinitely with hash-based invalidation.
 type CacheService struct {
 	cache *cache.Cache
 }
 
-// NewCacheService creates a new cache service
-// defaultExpiration: default expiration time for cache entries
+// NewCacheService creates a new cache service for in-memory TTL-based caching
+// defaultExpiration: default expiration time for cache entries (TTL)
 // cleanupInterval: interval for cleaning up expired entries
+// Note: This cache is for runtime data only. Filesystem caches never expire.
 func NewCacheService(defaultExpiration, cleanupInterval time.Duration) interfaces.CacheService {
 	return &CacheService{
 		cache: cache.New(defaultExpiration, cleanupInterval),

@@ -2,6 +2,27 @@
 
 A CLI tool for creating videos with translations and audio narration.
 
+## Installation
+
+### Pre-built Binaries
+
+Download the latest release for your platform from the [Releases page](https://github.com/Napolitain/gocreator/releases).
+
+```bash
+# Linux/macOS
+chmod +x gocreator-*
+sudo mv gocreator-* /usr/local/bin/gocreator
+
+# Verify installation
+gocreator --help
+```
+
+### From Source
+
+```bash
+go install github.com/Napolitain/gocreator/cmd/gocreator@latest
+```
+
 ## Features
 
 - Automated video creation from slides and text
@@ -9,6 +30,15 @@ A CLI tool for creating videos with translations and audio narration.
 - Text-to-speech audio generation
 - Intelligent caching to reduce API costs
 - Parallel processing for better performance
+
+## Versioning
+
+This project uses **Calendar Versioning (CalVer)** with the format `YYYY-MM-DD`.
+
+Each release is tagged with the date it was created (e.g., `2025-01-15`). This makes it easy to:
+- Know when a version was released
+- Track the age of your installation
+- Plan upgrades based on release frequency
 
 ## Architecture
 

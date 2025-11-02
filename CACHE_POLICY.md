@@ -24,7 +24,11 @@ The application implements a multi-layered caching strategy to avoid redundant A
 
 **Cache Key**: Language code (e.g., "es", "fr", "de")
 
-**Invalidation**: Manual deletion of cache files or when source texts change
+**Expiration**: **Never expires** - Filesystem cache persists indefinitely
+
+**Invalidation**: 
+- Manual deletion of cache files
+- When source texts change (detected by content comparison)
 
 ## 2. Audio Generation Cache
 
@@ -42,8 +46,10 @@ The application implements a multi-layered caching strategy to avoid redundant A
 
 **Hash Files**: Each audio file has a corresponding `.hash` file containing the SHA256 hash of the text that generated it
 
+**Expiration**: **Never expires** - Filesystem cache persists indefinitely
+
 **Invalidation**: 
-- Automatic when text content changes (hash mismatch)
+- Automatic when text content changes (hash mismatch detected via SHA256)
 - Manual deletion of audio files or hash files
 
 ## 3. Video Segment Cache
@@ -57,10 +63,13 @@ The application implements a multi-layered caching strategy to avoid redundant A
 - Segments are generated in parallel for performance
 - All segments are then concatenated into the final video
 
+**Expiration**: **Never expires** - Filesystem cache persists indefinitely
+
 **Benefits**:
 - Enables parallel processing of segments
 - Allows reuse of segments if only some slides change
 - Simplifies debugging and inspection of individual segments
+- No time-based expiration - only hash-based invalidation
 
 ## 4. In-Memory Cache Service
 
@@ -69,11 +78,15 @@ The application implements a multi-layered caching strategy to avoid redundant A
 **Purpose**: General-purpose caching for runtime data that doesn't need persistence
 
 **Features**:
-- Time-based expiration
+- Time-based expiration (TTL)
 - Automatic cleanup of expired entries
 - Type-agnostic storage (stores interface{})
 
-**Usage**: Can be used by services for temporary caching needs
+**Expiration**: **TTL-based** - Entries expire after configured duration
+
+**Usage**: Can be used by services for temporary runtime caching needs
+
+**Important**: This is the ONLY cache type with TTL expiration. All filesystem-based caches (translations, audio, video segments) persist indefinitely and use hash-based invalidation instead of time-based expiration.
 
 ## Cache Directory Structure
 

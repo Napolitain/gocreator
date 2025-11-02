@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (YYYY-MM-DD format, e.g., 2025-01-15)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: darwin
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: darwin
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+          - os: windows
+            arch: amd64
+            goos: windows
+            goarch: amd64
+            ext: .exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          OUTPUT_NAME="gocreator-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+          go build -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" -o "$OUTPUT_NAME" ./cmd/gocreator
+          
+          # Create checksum
+          if command -v sha256sum &> /dev/null; then
+            sha256sum "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
+          else
+            shasum -a 256 "$OUTPUT_NAME" > "$OUTPUT_NAME.sha256"
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: gocreator-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            gocreator-*
+            !gocreator-*.sha256
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v5
+        with:
+          name: checksums-${{ matrix.os }}-${{ matrix.arch }}
+          path: gocreator-*.sha256
+
+  create-release:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -name "gocreator-*" -exec cp {} release-assets/ \;
+          cd release-assets
+          ls -lah
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## GoCreator Release ${{ steps.version.outputs.version }}
+            
+            ### Downloads
+            
+            Download the appropriate binary for your platform:
+            
+            - **Linux (x64)**: `gocreator-${{ steps.version.outputs.version }}-linux-amd64`
+            - **Linux (ARM64)**: `gocreator-${{ steps.version.outputs.version }}-linux-arm64`
+            - **macOS (Intel)**: `gocreator-${{ steps.version.outputs.version }}-darwin-amd64`
+            - **macOS (Apple Silicon)**: `gocreator-${{ steps.version.outputs.version }}-darwin-arm64`
+            - **Windows (x64)**: `gocreator-${{ steps.version.outputs.version }}-windows-amd64.exe`
+            
+            ### Installation
+            
+            ```bash
+            # Linux/macOS
+            chmod +x gocreator-*
+            sudo mv gocreator-* /usr/local/bin/gocreator
+            
+            # Verify installation
+            gocreator --help
+            ```
+            
+            ### Verification
+            
+            Verify the integrity of your download using the provided SHA256 checksums:
+            
+            ```bash
+            sha256sum -c gocreator-*.sha256
+            ```
+            
+            ### CalVer Versioning
+            
+            This project uses Calendar Versioning (CalVer) with the format `YYYY-MM-DD`.
+            Each release is tagged with the date it was created.
+          files: release-assets/*
+          draft: false
+          prerelease: false
