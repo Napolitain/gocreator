@@ -15,7 +15,7 @@ type VideoCreatorConfig struct {
 	RootDir        string
 	InputLang      string
 	OutputLangs    []string
-	GoogleSlidesID string // When empty, uses local slides; when provided, fetches from Google Slides API
+	GoogleSlidesID string // Google Slides presentation ID (found in the URL). When empty, uses local slides; when provided, fetches from Google Slides API
 }
 
 // VideoCreator orchestrates the video creation process

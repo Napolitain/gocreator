@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gocreator/internal/interfaces"
 
@@ -86,7 +87,7 @@ func (s *GoogleSlidesService) createSlidesService(ctx context.Context) (*slides.
 	// Check for credentials file
 	credentialsPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credentialsPath == "" {
-		return nil, fmt.Errorf("GOOGLE_APPLICATION_CREDENTIALS environment variable not set")
+		return nil, fmt.Errorf("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Please set it to the path of your service account credentials file. See GOOGLE_SLIDES_GUIDE.md for setup instructions")
 	}
 
 	// Create service with credentials
@@ -100,13 +101,18 @@ func (s *GoogleSlidesService) createSlidesService(ctx context.Context) (*slides.
 
 // downloadImage downloads an image from a URL and saves it to the filesystem
 func (s *GoogleSlidesService) downloadImage(ctx context.Context, url, outputPath string) error {
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
 	// Make HTTP request
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download image: %w", err)
 	}
