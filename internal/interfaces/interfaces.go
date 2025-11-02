@@ -17,11 +17,13 @@ type FileSystem interface {
 // Translator handles text translation
 type Translator interface {
 	Translate(ctx context.Context, text, targetLang string) (string, error)
+	TranslateBatch(ctx context.Context, texts []string, targetLang string) ([]string, error)
 }
 
 // AudioGenerator generates audio from text
 type AudioGenerator interface {
 	Generate(ctx context.Context, text, outputPath string) error
+	GenerateBatch(ctx context.Context, texts []string, outputDir string) ([]string, error)
 }
 
 // VideoGenerator generates videos from slides and audio
@@ -39,6 +41,14 @@ type TextProcessor interface {
 // SlideLoader loads slide images from a directory
 type SlideLoader interface {
 	LoadSlides(ctx context.Context, dir string) ([]string, error)
+}
+
+// CacheService manages caching operations
+type CacheService interface {
+	Get(key string) (interface{}, bool)
+	Set(key string, value interface{})
+	Delete(key string)
+	Clear()
 }
 
 // Logger abstracts logging operations

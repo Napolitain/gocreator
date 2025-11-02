@@ -67,6 +67,13 @@ func (s *AudioService) Generate(ctx context.Context, text, outputPath string) er
 		return fmt.Errorf("failed to write audio: %w", err)
 	}
 
+	// Save hash for cache validation
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
+	hashPath := outputPath + ".hash"
+	if err := afero.WriteFile(s.fs, hashPath, []byte(hash), 0644); err != nil {
+		return fmt.Errorf("failed to write hash file: %w", err)
+	}
+
 	return nil
 }
 

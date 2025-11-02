@@ -20,22 +20,22 @@ type VideoCreatorConfig struct {
 // VideoCreator orchestrates the video creation process
 type VideoCreator struct {
 	fs                 afero.Fs
-	textService        *TextService
-	translationService *TranslationService
-	audioService       *AudioService
-	videoService       *VideoService
-	slideService       *SlideService
+	textService        interfaces.TextProcessor
+	translationService interfaces.Translator
+	audioService       interfaces.AudioGenerator
+	videoService       interfaces.VideoGenerator
+	slideService       interfaces.SlideLoader
 	logger             interfaces.Logger
 }
 
 // NewVideoCreator creates a new video creator
 func NewVideoCreator(
 	fs afero.Fs,
-	textService *TextService,
-	translationService *TranslationService,
-	audioService *AudioService,
-	videoService *VideoService,
-	slideService *SlideService,
+	textService interfaces.TextProcessor,
+	translationService interfaces.Translator,
+	audioService interfaces.AudioGenerator,
+	videoService interfaces.VideoGenerator,
+	slideService interfaces.SlideLoader,
 	logger interfaces.Logger,
 ) *VideoCreator {
 	return &VideoCreator{
