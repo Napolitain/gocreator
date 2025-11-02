@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: go
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Install dependencies
+        run: go mod tidy
+
+      - name: Build gocreator
+        run: go build ./cmd/gocreator
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p ${{ github.workspace }}/artifacts
+          cp ./gocreator ${{ github.workspace }}/artifacts/gocreator
+
+      - name: Upload ${{ matrix.name }} binary
+        uses: actions/upload-artifact@v5
+        with:
+          name: gocreator
+          path: ${{ github.workspace }}/artifacts/gocreator
