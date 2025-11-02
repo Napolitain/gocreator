@@ -16,6 +16,11 @@ import (
 	"google.golang.org/api/slides/v1"
 )
 
+const (
+	// defaultHTTPTimeout is the timeout for HTTP requests when downloading slide images
+	defaultHTTPTimeout = 30 * time.Second
+)
+
 // GoogleSlidesService handles fetching slides and notes from Google Slides
 type GoogleSlidesService struct {
 	fs     afero.Fs
@@ -65,9 +70,9 @@ func (s *GoogleSlidesService) LoadFromGoogleSlides(ctx context.Context, presenta
 		}
 
 		// Download slide image from thumbnail URL
-		slidePath := filepath.Join(outputDir, fmt.Sprintf("slide_%d.png", i))
+		slidePath := filepath.Join(outputDir, fmt.Sprintf("slide_%d.png", i+1))
 		if err := s.downloadImage(ctx, thumbnail.ContentUrl, slidePath); err != nil {
-			return nil, nil, fmt.Errorf("failed to download slide %d: %w", i, err)
+			return nil, nil, fmt.Errorf("failed to download slide %d: %w", i+1, err)
 		}
 
 		slidePaths = append(slidePaths, slidePath)
@@ -103,7 +108,7 @@ func (s *GoogleSlidesService) createSlidesService(ctx context.Context) (*slides.
 func (s *GoogleSlidesService) downloadImage(ctx context.Context, url, outputPath string) error {
 	// Create HTTP client with timeout
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: defaultHTTPTimeout,
 	}
 
 	// Make HTTP request

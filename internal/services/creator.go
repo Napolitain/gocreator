@@ -71,6 +71,8 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 		// Save the fetched notes as input texts for caching
 		textsPath := filepath.Join(dataDir, "texts.txt")
 		if err := vc.textService.Save(ctx, textsPath, inputTexts); err != nil {
+			// Saving fetched notes is only for caching purposes. It's acceptable to continue without saving,
+			// for example, if running on a read-only filesystem or if caching is not critical for correctness.
 			vc.logger.Warn("Failed to save fetched notes", "error", err)
 		}
 	} else {

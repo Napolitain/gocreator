@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
+      - name: Run tests
+        run: go test -v ./...
+
       - name: Build gocreator
         run: go build ./cmd/gocreator
 

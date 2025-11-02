@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - '*'
   workflow_dispatch:
@@ -56,6 +58,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            VERSION=$(date +%Y-%m-%d)
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
@@ -107,6 +111,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            VERSION=$(date +%Y-%m-%d)
           else
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
