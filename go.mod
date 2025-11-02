@@ -3,6 +3,7 @@ module gocreator
 go 1.24.3
 
 require (
+	github.com/go-ole/go-ole v1.3.0
 	github.com/openai/openai-go/v3 v3.7.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/spf13/afero v1.15.0
@@ -19,7 +20,6 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
