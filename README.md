@@ -46,6 +46,30 @@ See the [Getting Started Example](./examples/getting-started/) for detailed inst
 
 ## Usage
 
+### Working Directory
+
+**Important**: GoCreator loads and creates files relative to your **current working directory**, not where the binary is installed.
+
+For example:
+- If the binary is installed in `/usr/local/bin/gocreator`
+- And you run it from `/home/user/myproject/`
+- It will look for data in `/home/user/myproject/data/` (your working directory)
+- NOT in `/usr/local/bin/data/` (the binary's location)
+
+This means you can:
+- Install the binary once system-wide
+- Use it in different projects by changing directories
+- Keep your project data separate from the installation
+
+```bash
+# Example: Using the same binary for different projects
+cd /home/user/project1
+gocreator create --lang en --langs-out en,fr
+
+cd /home/user/project2
+gocreator create --lang en --langs-out en,es
+```
+
 ### Using Local Slides
 
 Create a `data` directory in your project with:

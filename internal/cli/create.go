@@ -43,7 +43,12 @@ func runCreate(inputLang, outputLangs, googleSlidesID string) error {
 	slogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	logger := &interfaces.SlogLogger{Logger: slogger}
 
-	// Get working directory
+	// Get working directory (where the user runs the command from)
+	// This is intentionally NOT the executable's location - we want to load
+	// and create data files relative to where the user is, not where the
+	// binary is installed. For example, if the binary is in /usr/local/bin/
+	// but the user runs it from /home/user/myproject/, we load data from
+	// /home/user/myproject/data/ (the working directory).
 	rootDir, err := os.Getwd()
 	if err != nil {
 		logger.Error("Failed to get working directory", "error", err)
