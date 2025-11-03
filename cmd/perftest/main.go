@@ -12,6 +12,7 @@ import (
 	"gocreator/internal/interfaces"
 	"gocreator/internal/services"
 
+	"github.com/joho/godotenv"
 	"github.com/openai/openai-go/v3"
 	"github.com/spf13/afero"
 )
@@ -27,11 +28,11 @@ type PerfTestResult struct {
 
 // PerfTestResults holds all performance test results
 type PerfTestResults struct {
-	Results       []PerfTestResult
-	E2EDuration   time.Duration
-	E2ECacheDur   time.Duration
-	CacheHits     int
-	TotalOps      int
+	Results     []PerfTestResult
+	E2EDuration time.Duration
+	E2ECacheDur time.Duration
+	CacheHits   int
+	TotalOps    int
 }
 
 // Logger for performance testing
@@ -67,7 +68,7 @@ func (l *perfLogger) Error(msg string, args ...any) {
 	}
 	fmt.Println()
 }
-func (l *perfLogger) Debug(msg string, args ...any) {}
+func (l *perfLogger) Debug(msg string, args ...any)      {}
 func (l *perfLogger) With(args ...any) interfaces.Logger { return l }
 
 func main() {
@@ -78,6 +79,12 @@ func main() {
 	fmt.Println("GoCreator Performance Testing Tool")
 	fmt.Println("===================================")
 	fmt.Println()
+
+	if err := godotenv.Load(); err != nil {
+		if !os.IsNotExist(err) {
+			_, _ = fmt.Fprintf(os.Stderr, "Warning: failed to load .env: %v\n", err)
+		}
+	}
 
 	// Check for OpenAI API key
 	apiKey := os.Getenv("OPENAI_API_KEY")
@@ -171,7 +178,7 @@ func runRealAPITests(ctx context.Context, fs afero.Fs, dataDir string, results *
 	// Create services
 	logger := newPerfLogger("test")
 	textService := services.NewTextService(fs, logger)
-	
+
 	openaiClient := openai.NewClient()
 	client := adapters.NewOpenAIAdapter(openaiClient)
 
@@ -181,7 +188,7 @@ func runRealAPITests(ctx context.Context, fs afero.Fs, dataDir string, results *
 	// Test without cache
 	fmt.Println("Test 1: Operations WITHOUT cache")
 	fmt.Println("----------------------------------")
-	
+
 	testTexts := []string{
 		"Welcome to GoCreator performance testing",
 		"This is the second slide with some content",
