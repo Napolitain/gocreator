@@ -48,6 +48,11 @@ func (s *SlideService) LoadSlides(ctx context.Context, dir string) ([]string, er
 		".png":  true,
 		".jpg":  true,
 		".jpeg": true,
+		".mp4":  true, // Support video files
+		".mov":  true,
+		".avi":  true,
+		".mkv":  true,
+		".webm": true,
 	}
 
 	for _, file := range files {

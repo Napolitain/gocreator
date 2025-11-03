@@ -26,6 +26,7 @@ go install github.com/Napolitain/gocreator/cmd/gocreator@latest
 ## Features
 
 - Automated video creation from slides and text
+- **Video input support** - Use video clips as "slides" with their duration, not just static images
 - **Google Slides API integration** - Fetch slides and speaker notes directly from Google Slides
 - Multi-language support with AI-powered translation
 - Text-to-speech audio generation
@@ -37,12 +38,17 @@ go install github.com/Napolitain/gocreator/cmd/gocreator@latest
 ### Using Local Slides
 
 Create a `data` directory in your project with:
-- `data/slides/` - Directory containing slide images (PNG, JPEG)
+- `data/slides/` - Directory containing slide images (PNG, JPEG) or video clips (MP4, MOV, AVI, MKV, WEBM)
 - `data/texts.txt` - Text file with slide narrations separated by `-`
 
 ```bash
 gocreator create --lang en --langs-out en,fr,es
 ```
+
+**How it works**:
+- **Image slides**: Duration is determined by the TTS audio length
+- **Video slides**: Duration is determined by the video length, with TTS audio aligned at the beginning
+- You can mix images and videos in the same presentation
 
 ### Using Google Slides
 
