@@ -128,7 +128,7 @@ When `OPENAI_API_KEY` is set, the tool performs actual API calls:
 
 The benchmarks demonstrate the performance impact of caching:
 
-- **Audio Generation**: ~12x faster with cache (14.4µs → 1.2µs)
+- **Audio Generation**: ~12x faster with cache (without cache: ~14.4µs, with cache: ~1.2µs)
 - **Cache Operations**: Get operations are ~3x faster than Set operations
 - **Text Operations**: Hash computation is very fast (~257ns per operation)
 

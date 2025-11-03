@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"io"
 	"strconv"
 	"strings"
 	"testing"
@@ -11,6 +12,19 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/mock"
 )
+
+// benchmarkReadCloser implements io.ReadCloser for benchmark testing
+type benchmarkReadCloser struct {
+	*strings.Reader
+}
+
+func (m *benchmarkReadCloser) Close() error {
+	return nil
+}
+
+func newBenchmarkReadCloser(data string) io.ReadCloser {
+	return &benchmarkReadCloser{Reader: strings.NewReader(data)}
+}
 
 // Benchmark audio generation without cache
 func BenchmarkAudioService_Generate_NoCache(b *testing.B) {
@@ -25,7 +39,7 @@ func BenchmarkAudioService_Generate_NoCache(b *testing.B) {
 
 	// Mock API response
 	mockClient.On("GenerateSpeech", mock.Anything, text).
-		Return(&cacheTestReadCloser{Reader: strings.NewReader("audio data")}, nil)
+		Return(newBenchmarkReadCloser("audio data"), nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -48,7 +62,7 @@ func BenchmarkAudioService_Generate_WithCache(b *testing.B) {
 
 	// Generate once to populate cache
 	mockClient.On("GenerateSpeech", mock.Anything, text).
-		Return(&cacheTestReadCloser{Reader: strings.NewReader("audio data")}, nil).Once()
+		Return(newBenchmarkReadCloser("audio data"), nil).Once()
 	_ = service.Generate(ctx, text, outputPath)
 
 	b.ResetTimer()
@@ -77,7 +91,7 @@ func BenchmarkAudioService_GenerateBatch_NoCache(b *testing.B) {
 	// Mock API responses for all texts
 	for _, text := range texts {
 		mockClient.On("GenerateSpeech", mock.Anything, text).
-			Return(&cacheTestReadCloser{Reader: strings.NewReader("audio data")}, nil)
+			Return(newBenchmarkReadCloser("audio data"), nil)
 	}
 
 	b.ResetTimer()
@@ -108,7 +122,7 @@ func BenchmarkAudioService_GenerateBatch_WithCache(b *testing.B) {
 	// Mock API responses for initial generation
 	for _, text := range texts {
 		mockClient.On("GenerateSpeech", mock.Anything, text).
-			Return(&cacheTestReadCloser{Reader: strings.NewReader("audio data")}, nil).Once()
+			Return(newBenchmarkReadCloser("audio data"), nil).Once()
 	}
 
 	// Generate once to populate cache
