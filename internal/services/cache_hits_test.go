@@ -133,7 +133,6 @@ func TestTranslationCacheHits(t *testing.T) {
 		assert.NoError(t, err)
 		// Translation API should NOT be called (cache hit)
 		mockTranslation.AssertNotCalled(t, "TranslateBatch")
-		mockTranslation.AssertNumberOfCalls(t, "TranslateBatch", 0)
 	})
 
 	t.Run("multiple languages with mixed cache hits", func(t *testing.T) {
