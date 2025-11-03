@@ -20,7 +20,9 @@ func TestWorkingDirectoryUsage(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		// Restore original working directory
-		_ = os.Chdir(originalWd)
+		if err := os.Chdir(originalWd); err != nil {
+			t.Errorf("Failed to restore working directory: %v", err)
+		}
 	}()
 
 	// Create a temporary test directory structure
