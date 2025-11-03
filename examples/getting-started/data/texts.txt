@@ -1,0 +1,9 @@
+Welcome to GoCreator! This is an automated video creation tool that makes it easy to generate professional videos with translations and audio narration.
+-
+GoCreator is a command-line tool written in Go that transforms your slides and text into engaging videos. It supports multiple languages and uses AI to generate translations and natural-sounding speech.
+-
+GoCreator offers several powerful features. It provides automated video creation from slides and text. It supports multi-language translation powered by AI. It includes text-to-speech audio generation. And it uses intelligent caching to reduce API costs and improve performance.
+-
+Getting started with GoCreator is simple. First, create a data directory with your slides and text. Then, run the gocreator create command with your desired languages. The tool will handle everything else, from translations to audio generation to video assembly.
+-
+Thank you for watching this introduction to GoCreator! To learn more, visit the GitHub repository at github.com/Napolitain/gocreator. Start creating your own multilingual videos today!

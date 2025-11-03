@@ -33,6 +33,17 @@ go install github.com/Napolitain/gocreator/cmd/gocreator@latest
 - Intelligent caching to reduce API costs
 - Parallel processing for better performance
 
+## Quick Start
+
+**New to GoCreator?** Check out the [examples/](./examples/) directory for a hands-on tutorial:
+
+```bash
+cd examples/getting-started
+gocreator create --lang en --langs-out en,fr,es
+```
+
+See the [Getting Started Example](./examples/getting-started/) for detailed instructions.
+
 ## Usage
 
 ### Using Local Slides

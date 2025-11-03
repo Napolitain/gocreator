@@ -25,3 +25,10 @@ vendor/
 *.swo
 *~
 .env
+
+# Example output directories
+examples/*/data/output/
+examples/*/data/translations/
+examples/*/data/audio/
+examples/*/data/segments/
+examples/*/data/cache/
