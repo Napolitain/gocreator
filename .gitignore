@@ -24,6 +24,7 @@ vendor/
 *.swp
 *.swo
 *~
+.env
 
 # Example output directories
 examples/*/data/output/

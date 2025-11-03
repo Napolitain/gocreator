@@ -36,7 +36,7 @@ func (s *TextService) Load(ctx context.Context, path string) ([]string, error) {
 	}
 	defer file.Close()
 
-	texts := []string{} // Initialize as empty slice instead of nil
+	var texts []string // Initialize as empty slice instead of nil
 	var current strings.Builder
 	scanner := bufio.NewScanner(file)
 

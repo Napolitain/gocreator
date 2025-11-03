@@ -39,7 +39,7 @@ func (a *OpenAIAdapter) GenerateSpeech(ctx context.Context, text string) (io.Rea
 		openai.AudioSpeechNewParams{
 			Model:          openai.SpeechModelTTS1HD,
 			Input:          text,
-			Voice:          openai.AudioSpeechNewParamsVoice("onyx"),
+			Voice:          "onyx",
 			ResponseFormat: openai.AudioSpeechNewParamsResponseFormatMP3,
 		},
 	)
