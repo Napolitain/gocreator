@@ -7,11 +7,12 @@ import (
 
 	"gocreator/internal/mocks"
 
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/mock"
 )
 
-// Benchmark single translation
-func BenchmarkTranslationService_Translate(b *testing.B) {
+// Benchmark single translation without cache
+func BenchmarkTranslationService_Translate_NoCache(b *testing.B) {
 	mockClient := new(mocks.MockOpenAIClient)
 	logger := &mockLogger{}
 	service := NewTranslationService(mockClient, logger)
@@ -23,6 +24,30 @@ func BenchmarkTranslationService_Translate(b *testing.B) {
 	// Mock API response
 	mockClient.On("ChatCompletion", mock.Anything, mock.Anything).
 		Return("Este es un texto de prueba para el benchmark de traducción", nil)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = service.Translate(ctx, text, targetLang)
+	}
+}
+
+// Benchmark single translation with memory cache
+func BenchmarkTranslationService_Translate_WithCache(b *testing.B) {
+	mockClient := new(mocks.MockOpenAIClient)
+	logger := &mockLogger{}
+	fs := afero.NewMemMapFs()
+	service := NewTranslationServiceWithCache(mockClient, logger, fs, "/cache")
+
+	text := "This is a test text for translation benchmark"
+	targetLang := "Spanish"
+	ctx := context.Background()
+
+	// Mock API response (only called once to populate cache)
+	mockClient.On("ChatCompletion", mock.Anything, mock.Anything).
+		Return("Este es un texto de prueba para el benchmark de traducción", nil).Once()
+
+	// First call to populate cache
+	_, _ = service.Translate(ctx, text, targetLang)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

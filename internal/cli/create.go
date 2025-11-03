@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gocreator/internal/adapters"
@@ -57,7 +58,11 @@ func runCreate(inputLang, outputLangs, googleSlidesID string) error {
 
 	// Create services with dependency injection
 	textService := services.NewTextService(fs, logger)
-	translationService := services.NewTranslationService(openaiAdapter, logger)
+	
+	// Create translation service with disk cache
+	translationCacheDir := filepath.Join(rootDir, "data", "cache", "translations")
+	translationService := services.NewTranslationServiceWithCache(openaiAdapter, logger, fs, translationCacheDir)
+	
 	audioService := services.NewAudioService(fs, openaiAdapter, textService, logger)
 	videoService := services.NewVideoService(fs, logger)
 	

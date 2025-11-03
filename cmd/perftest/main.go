@@ -183,7 +183,12 @@ func runRealAPITests(ctx context.Context, fs afero.Fs, dataDir string, results *
 	client := adapters.NewOpenAIAdapter(openaiClient)
 
 	audioService := services.NewAudioService(fs, client, textService, logger)
-	translationService := services.NewTranslationService(client, logger)
+	
+	// Create translation service with disk cache
+	translationCacheDir := filepath.Join(dataDir, "cache", "translations")
+	translationService := services.NewTranslationServiceWithCache(client, logger, fs, translationCacheDir)
+	
+	videoService := services.NewVideoService(fs, logger)
 
 	// Test without cache
 	fmt.Println("Test 1: Operations WITHOUT cache")
@@ -279,6 +284,39 @@ func runRealAPITests(ctx context.Context, fs afero.Fs, dataDir string, results *
 	results.E2ECacheDur = cachedTranslationDur + cachedAudioDur
 	results.CacheHits = logger.cacheHits
 	results.TotalOps = len(testTexts) * 2
+
+	// Test video concatenation (FFmpeg combine audio + slides)
+	fmt.Println()
+	fmt.Println("Test 3: Video Concatenation")
+	fmt.Println("----------------------------")
+	
+	// Create test slides (simple text files as placeholders)
+	slidesDir := filepath.Join(dataDir, "slides")
+	fs.MkdirAll(slidesDir, 0755)
+	testSlides := make([]string, len(testTexts))
+	for i := range testTexts {
+		slidePath := filepath.Join(slidesDir, fmt.Sprintf("slide_%d.txt", i))
+		afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d content", i)), 0644)
+		testSlides[i] = slidePath
+	}
+	
+	// Measure video generation from slides + audio
+	outputPath := filepath.Join(dataDir, "out", "test_video.mp4")
+	start = time.Now()
+	err = videoService.GenerateFromSlides(ctx, testSlides, audioPaths, outputPath)
+	videoConcatDur := time.Since(start)
+	if err != nil {
+		fmt.Printf("  Video concatenation error: %v (FFmpeg may not be available in test environment)\n", err)
+	} else {
+		results.Results = append(results.Results, PerfTestResult{
+			Operation:   "Video Concatenation (3 segments)",
+			CacheStatus: "N/A",
+			Duration:    videoConcatDur,
+			Iterations:  len(testSlides),
+			AvgDuration: videoConcatDur / time.Duration(len(testSlides)),
+		})
+		fmt.Printf("  ✓ Video Concatenation: %v (avg: %v per segment)\n", videoConcatDur, videoConcatDur/time.Duration(len(testSlides)))
+	}
 
 	fmt.Println()
 	fmt.Println("✓ Real API tests completed")
