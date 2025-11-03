@@ -379,8 +379,8 @@ func TestFFmpegVideoCacheHits(t *testing.T) {
 			assert.True(t, exists, "Video segment %d should exist at %s", i, path)
 		}
 
-		// In a real scenario, these segments would persist between runs
-		// and FFmpeg would only regenerate if the segment is missing
+		// Note: In production, these segments persist on disk between runs.
+		// VideoService regenerates segments only when they don't exist.
 	})
 }
 
