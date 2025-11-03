@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"gocreator/internal/interfaces"
 
@@ -99,10 +100,26 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 		return fmt.Errorf("slide and text count mismatch: %d slides, %d texts", len(slides), len(inputTexts))
 	}
 
-	// Process each language
-	for _, lang := range cfg.OutputLangs {
-		if err := vc.processLanguage(ctx, cfg, lang, inputTexts, slides, dataDir); err != nil {
-			return fmt.Errorf("failed to process language %s: %w", lang, err)
+	// Process each language in parallel
+	var wg sync.WaitGroup
+	errors := make([]error, len(cfg.OutputLangs))
+	
+	for i, lang := range cfg.OutputLangs {
+		wg.Add(1)
+		go func(idx int, l string) {
+			defer wg.Done()
+			if err := vc.processLanguage(ctx, cfg, l, inputTexts, slides, dataDir); err != nil {
+				errors[idx] = fmt.Errorf("failed to process language %s: %w", l, err)
+			}
+		}(i, lang)
+	}
+	
+	wg.Wait()
+	
+	// Check for any errors
+	for _, err := range errors {
+		if err != nil {
+			return err
 		}
 	}
 

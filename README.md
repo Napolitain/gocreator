@@ -156,7 +156,37 @@ go test -cover ./...
 
 # Run specific test package
 go test ./internal/services/...
+
+# Run benchmark tests
+go test -bench=. ./internal/services/ -run=^$
+
+# Run benchmarks with memory stats
+go test -bench=. -benchmem ./internal/services/ -run=^$
 ```
+
+### Performance Testing
+
+GoCreator includes a comprehensive performance testing tool that measures cache performance, API latency, and provides end-to-end metrics:
+
+```bash
+# Build the performance testing tool
+go build -o perftest ./cmd/perftest/
+
+# Run in simulation mode (no API key needed)
+./perftest
+
+# Run with real OpenAI API (requires OPENAI_API_KEY)
+export OPENAI_API_KEY="your-key"
+./perftest
+```
+
+The tool generates markdown-formatted performance tables showing:
+- Operation timings with and without cache
+- Cache hit rates and counts
+- End-to-end latency measurements
+- Performance improvement factors
+
+See [cmd/perftest/README.md](cmd/perftest/README.md) for detailed documentation.
 
 ### Test Coverage
 
@@ -165,6 +195,7 @@ go test ./internal/services/...
 - **TranslationService**: Single and batch translations
 - **CacheService**: Set, Get, Delete, Clear, Expiration
 - **VideoCreator**: Full workflow orchestration with mocked services
+- **Benchmarks**: Performance tests for all core operations with cache scenarios
 
 All external dependencies (filesystem, OpenAI API) are mocked for isolated unit testing.
 
