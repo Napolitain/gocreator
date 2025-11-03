@@ -32,3 +32,5 @@ examples/*/data/translations/
 examples/*/data/audio/
 examples/*/data/segments/
 examples/*/data/cache/
+perftest
+gocreator
