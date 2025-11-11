@@ -873,14 +873,209 @@ $ gocreator review approve --video draft-v1
 $ gocreator publish --video draft-v1  # Finalize
 ```
 
-#### 3.6.3 Version Control Integration
-**Proposed**: Better git integration
+#### 3.6.3 Version Control Integration - "Versioned YouTube" Concept
+**Proposed**: Treat video projects like code repositories with Git-based versioning
+
+**Core Concept**: Since videos are generated from source inputs (slides, text, config), we can version the inputs rather than the outputs. This enables:
+- **Branching**: Try different narration styles or translations in parallel
+- **Rollback**: Revert to previous versions of slides or narration
+- **History**: Track all changes with proper commit messages
+- **Collaboration**: Multiple people work on different aspects (slides, narration, translations)
+
+**Key Insight**: No need to version the rendered videos themselves - just version the inputs, and regenerate on demand.
 
 ```bash
-$ gocreator track  # Track changes in texts/slides
-$ gocreator diff   # Show what changed
-$ gocreator blame  # See who changed what
+# Initialize a video project as a Git repository
+$ gocreator init --git
+Initialized GoCreator project with Git
+  .git/
+  data/slides/
+  data/texts.txt
+  gocreator.yaml
+  .gitignore (videos, cache excluded)
+
+# Standard Git workflow for video projects
+$ git add data/slides/intro.png data/texts.txt
+$ git commit -m "Add introduction slide and narration"
+$ git push origin main
+
+# Create a branch for alternative content
+$ git checkout -b experiment/shorter-version
+$ # Edit texts.txt to be more concise
+$ git commit -am "Try shorter narration for better pacing"
+$ gocreator create  # Generate video from this branch
+
+# Compare different versions
+$ gocreator diff main experiment/shorter-version
+Differences:
+  data/texts.txt:
+    - main: 1,234 words (est. 8m video)
+    - experiment/shorter-version: 856 words (est. 5m video)
+  
+  Slides: No changes
+  
+$ gocreator preview main experiment/shorter-version
+Opens side-by-side preview of both versions
+
+# Merge the better version
+$ git checkout main
+$ git merge experiment/shorter-version
+$ git push
+
+# Rollback to previous version
+$ git log --oneline
+a1b2c3d Add call-to-action slide
+d4e5f6g Update narration for clarity
+g7h8i9j Initial version
+
+$ git checkout g7h8i9j -- data/
+$ gocreator create  # Regenerate from old inputs
+$ git add data/ && git commit -m "Revert to simpler version"
+
+# Tag releases
+$ git tag v1.0-final
+$ git push --tags
 ```
+
+**Advanced Features**:
+
+```bash
+# Compare generated videos from different commits
+$ gocreator compare HEAD~2 HEAD
+Rendering videos from both versions...
+  v1 (HEAD~2): output-v1.mp4 (5m 23s, 45MB)
+  v2 (HEAD):   output-v2.mp4 (5m 45s, 48MB)
+
+Differences:
+  - 3 slides changed
+  - Narration expanded in slides 2, 4
+  - Added French translation
+
+# View history of a specific slide
+$ gocreator log data/slides/slide3.png
+commit a1b2c3d
+  Updated slide 3 with new branding
+  
+commit g7h8i9j
+  Initial version of slide 3
+
+# Blame for narration text
+$ gocreator blame data/texts.txt
+Line 15-20 (Slide 3 narration):
+  Author: Alice <alice@example.com>
+  Date:   2025-11-10
+  Commit: a1b2c3d
+  
+  Updated to include product benefits
+
+# Branch comparison dashboard
+$ gocreator branches
+* main (5m 45s video, 3 languages)
+  experiment/shorter-version (5m 12s video, 3 languages)
+  feature/add-spanish (5m 45s video, 4 languages)
+  
+# Automated regeneration on merge
+$ cat .github/workflows/regenerate.yml
+name: Regenerate Videos
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/**'
+      - 'gocreator.yaml'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: napolitain/gocreator-action@v1
+      - name: Upload videos
+        run: |
+          # Upload to YouTube, S3, or wherever
+```
+
+**Benefits of Git-Based Versioning**:
+
+1. **No Storage Overhead**: Only store source inputs (text, images, config)
+   - Videos can be regenerated on demand
+   - No need to version large video files
+   - Git handles small text/image files efficiently
+
+2. **True Branching**: Experiment with different versions in parallel
+   - Try different narration styles
+   - Test alternative translations
+   - A/B test different slide designs
+
+3. **Collaboration**: Multiple contributors working together
+   - One person updates slides
+   - Another edits narration
+   - Third person adds translations
+   - Standard Git merge workflows
+
+4. **Audit Trail**: Complete history of all changes
+   - Who changed what and when
+   - Why changes were made (commit messages)
+   - Ability to trace decisions
+
+5. **Rollback Safety**: Easy to revert mistakes
+   - Any version can be restored instantly
+   - No data loss
+   - Safe experimentation
+
+6. **CI/CD Integration**: Automated workflows
+   - Regenerate videos on every commit
+   - Automatic publishing to platforms
+   - Consistent builds
+
+**Implementation Notes**:
+
+```yaml
+# .gitignore (automatically created by gocreator init --git)
+# Exclude generated outputs and caches
+data/out/
+data/cache/
+*.mp4
+*.mp3
+*.wav
+
+# Include source inputs
+!data/slides/
+!data/texts.txt
+!gocreator.yaml
+```
+
+**Use Cases**:
+
+- **Educational Content**: Version course materials, roll back after student feedback
+- **Marketing Videos**: A/B test different messaging, track what works
+- **Documentation**: Keep video tutorials in sync with code versions
+- **Multi-language Content**: Branch per language, merge approved translations
+- **Team Projects**: Distribute work, review changes before merging
+
+**Future Enhancement: Distributed Workflow**
+
+```bash
+# Fork a video project
+$ gocreator fork https://github.com/company/product-video
+
+# Make improvements
+$ # Edit slides and narration
+$ git commit -am "Improve clarity in introduction"
+
+# Submit for review
+$ gocreator pull-request
+Creates PR with:
+  - Before/after video comparison
+  - Diff of inputs
+  - Generated preview
+
+# Maintainer reviews and merges
+$ git merge feature-branch
+$ gocreator publish --platform youtube
+```
+
+This approach leverages Git's existing power for content versioning while focusing GoCreator on what it does best: generating high-quality videos from versioned inputs.
 
 ---
 
