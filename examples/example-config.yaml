@@ -1,0 +1,53 @@
+# GoCreator Configuration Example
+# This file shows all available configuration options
+
+input:
+  # Input language (required)
+  lang: en
+  
+  # Source type: "local" or "google-slides" (default: "local")
+  source: local
+  
+  # Google Slides presentation ID (required if source is "google-slides")
+  # Find this in the URL: https://docs.google.com/presentation/d/[PRESENTATION_ID]/edit
+  # presentation_id: "1ABC-xyz123_EXAMPLE-ID"
+
+output:
+  # Output languages (required)
+  # Generate videos in multiple languages
+  languages:
+    - en
+    - fr
+    - es
+  
+  # Output directory (default: "./data/out")
+  directory: ./data/out
+  
+  # Video format (default: "mp4")
+  # Options: mp4, webm, etc.
+  format: mp4
+  
+  # Quality preset (default: "medium")
+  # Options: low, medium, high, ultra
+  quality: medium
+
+voice:
+  # TTS model (default: "tts-1-hd")
+  # Options: tts-1, tts-1-hd
+  model: tts-1-hd
+  
+  # Voice name (default: "alloy")
+  # Options: alloy, echo, fable, onyx, nova, shimmer
+  voice: alloy
+  
+  # Speech speed (default: 1.0)
+  # Range: 0.25 to 4.0
+  speed: 1.0
+
+cache:
+  # Enable caching (default: true)
+  # Caching reduces API costs by reusing translations and audio
+  enabled: true
+  
+  # Cache directory (default: "./data/cache")
+  directory: ./data/cache

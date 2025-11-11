@@ -76,3 +76,23 @@ type SlogLogger struct {
 func (l *SlogLogger) With(args ...any) Logger {
 	return &SlogLogger{Logger: l.Logger.With(args...)}
 }
+
+// ProgressCallback receives progress updates during video creation
+type ProgressCallback interface {
+	OnStageStart(stage string)
+	OnStageProgress(stage string, progress int, message string)
+	OnStageComplete(stage string, success bool, message string)
+	OnItemStart(stage string, item string)
+	OnItemProgress(stage string, item string, progress int, message string)
+	OnItemComplete(stage string, item string, success bool, message string)
+}
+
+// NoOpProgressCallback is a progress callback that does nothing
+type NoOpProgressCallback struct{}
+
+func (n *NoOpProgressCallback) OnStageStart(stage string)                                          {}
+func (n *NoOpProgressCallback) OnStageProgress(stage string, progress int, message string)        {}
+func (n *NoOpProgressCallback) OnStageComplete(stage string, success bool, message string)        {}
+func (n *NoOpProgressCallback) OnItemStart(stage string, item string)                             {}
+func (n *NoOpProgressCallback) OnItemProgress(stage string, item string, progress int, message string) {}
+func (n *NoOpProgressCallback) OnItemComplete(stage string, item string, success bool, message string) {}
