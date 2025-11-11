@@ -72,7 +72,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          OUTPUT_NAME="gocreator-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+          OUTPUT_NAME="gocreator-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
           go build -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" -o "$OUTPUT_NAME" ./cmd/gocreator
           
           # Create checksum
@@ -85,7 +85,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: gocreator-${{ steps.version.outputs.version }}-${{ matrix.os }}-${{ matrix.arch }}
+          name: gocreator-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             gocreator-*
             !gocreator-*.sha256
@@ -132,42 +132,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
-          body: |
-            ## GoCreator Release ${{ steps.version.outputs.version }}
-            
-            ### Downloads
-            
-            Download the appropriate binary for your platform:
-            
-            - **Linux (x64)**: `gocreator-${{ steps.version.outputs.version }}-linux-amd64`
-            - **Linux (ARM64)**: `gocreator-${{ steps.version.outputs.version }}-linux-arm64`
-            - **macOS (Intel)**: `gocreator-${{ steps.version.outputs.version }}-darwin-amd64`
-            - **macOS (Apple Silicon)**: `gocreator-${{ steps.version.outputs.version }}-darwin-arm64`
-            - **Windows (x64)**: `gocreator-${{ steps.version.outputs.version }}-windows-amd64.exe`
-            
-            ### Installation
-            
-            ```bash
-            # Linux/macOS
-            chmod +x gocreator-*
-            sudo mv gocreator-* /usr/local/bin/gocreator
-            
-            # Verify installation
-            gocreator --help
-            ```
-            
-            ### Verification
-            
-            Verify the integrity of your download using the provided SHA256 checksums:
-            
-            ```bash
-            sha256sum -c gocreator-*.sha256
-            ```
-            
-            ### CalVer Versioning
-            
-            This project uses Calendar Versioning (CalVer) with the format `YYYY-MM-DD`.
-            Each release is tagged with the date it was created.
+          body: ''
           files: release-assets/*
           draft: false
           prerelease: false
