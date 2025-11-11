@@ -18,16 +18,23 @@ import (
 
 // VideoService handles video generation
 type VideoService struct {
-	fs     afero.Fs
-	logger interfaces.Logger
+	fs         afero.Fs
+	logger     interfaces.Logger
+	transition TransitionConfig
 }
 
 // NewVideoService creates a new video service
 func NewVideoService(fs afero.Fs, logger interfaces.Logger) *VideoService {
 	return &VideoService{
-		fs:     fs,
-		logger: logger,
+		fs:         fs,
+		logger:     logger,
+		transition: TransitionConfig{Type: TransitionNone}, // Default: no transitions
 	}
+}
+
+// SetTransition sets the transition configuration
+func (s *VideoService) SetTransition(transition TransitionConfig) {
+	s.transition = transition
 }
 
 // GenerateFromSlides generates videos from slides and audio
@@ -209,6 +216,17 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 }
 
 func (s *VideoService) concatenateVideos(videoFiles []string, outputPath string) error {
+	// If transitions are disabled or only one video, use simple concatenation
+	if !s.transition.IsEnabled() || len(videoFiles) == 1 {
+		return s.concatenateVideosSimple(videoFiles, outputPath)
+	}
+
+	// Use transitions with xfade filter
+	return s.concatenateVideosWithTransitions(videoFiles, outputPath)
+}
+
+// concatenateVideosSimple concatenates videos without transitions
+func (s *VideoService) concatenateVideosSimple(videoFiles []string, outputPath string) error {
 	args := []string{"-y"}
 
 	for _, video := range videoFiles {
@@ -225,13 +243,100 @@ func (s *VideoService) concatenateVideos(videoFiles []string, outputPath string)
 	args = append(args, "-map", "[outv]", "-map", "[outa]", outputPath)
 
 	cmd := exec.Command("ffmpeg", args...)
-	s.logger.Debug("Concatenating videos", "command", cmd.String())
+	s.logger.Debug("Concatenating videos (no transitions)", "command", cmd.String())
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("ffmpeg concat error: %w, stderr: %s", err, stderr.String())
+	}
+
+	return nil
+}
+
+// concatenateVideosWithTransitions concatenates videos with transition effects
+func (s *VideoService) concatenateVideosWithTransitions(videoFiles []string, outputPath string) error {
+	args := []string{"-y"}
+
+	// Add all video inputs
+	for _, video := range videoFiles {
+		args = append(args, "-i", video)
+	}
+
+	// Build complex filter for transitions
+	var filterComplex strings.Builder
+	var audioMix strings.Builder
+
+	transitionName := s.transition.GetFFmpegTransitionName()
+	transitionDuration := s.transition.Duration
+
+	// Get duration of each video segment for offset calculation
+	durations := make([]float64, len(videoFiles))
+	for i, video := range videoFiles {
+		duration, err := s.getVideoDuration(video)
+		if err != nil {
+			s.logger.Warn("Failed to get video duration, using default", "video", video, "error", err)
+			duration = 5.0 // Default fallback
+		}
+		durations[i] = duration
+	}
+
+	// Generate xfade transitions between consecutive videos
+	currentVideoLabel := "[0:v]"
+	var offset float64 = 0.0
+
+	for i := 0; i < len(videoFiles)-1; i++ {
+		nextVideoLabel := fmt.Sprintf("[%d:v]", i+1)
+		outputLabel := fmt.Sprintf("[v%d]", i)
+
+		// Calculate offset: accumulated duration minus transition duration
+		offset += durations[i] - transitionDuration
+
+		// Add xfade filter
+		filterComplex.WriteString(fmt.Sprintf(
+			"%s%sxfade=transition=%s:duration=%.2f:offset=%.2f%s",
+			currentVideoLabel, nextVideoLabel,
+			transitionName, transitionDuration, offset,
+			outputLabel,
+		))
+
+		if i < len(videoFiles)-2 {
+			filterComplex.WriteString(";")
+		}
+
+		currentVideoLabel = outputLabel
+	}
+
+	// Final video output label
+	finalVideoLabel := fmt.Sprintf("[v%d]", len(videoFiles)-2)
+	if len(videoFiles) == 1 {
+		finalVideoLabel = "[0:v]"
+	}
+
+	// Mix audio streams
+	audioMix.WriteString(";")
+	for i := range videoFiles {
+		audioMix.WriteString(fmt.Sprintf("[%d:a]", i))
+	}
+	audioMix.WriteString(fmt.Sprintf("concat=n=%d:v=0:a=1[outa]", len(videoFiles)))
+
+	// Combine video and audio filters
+	fullFilter := filterComplex.String() + audioMix.String()
+	args = append(args, "-filter_complex", fullFilter)
+	args = append(args, "-map", finalVideoLabel, "-map", "[outa]", outputPath)
+
+	cmd := exec.Command("ffmpeg", args...)
+	s.logger.Debug("Concatenating videos with transitions",
+		"transition", transitionName,
+		"duration", transitionDuration,
+		"command", cmd.String())
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ffmpeg concat with transitions error: %w, stderr: %s", err, stderr.String())
 	}
 
 	return nil

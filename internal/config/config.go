@@ -11,10 +11,11 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Input  InputConfig  `yaml:"input"`
-	Output OutputConfig `yaml:"output"`
-	Voice  VoiceConfig  `yaml:"voice,omitempty"`
-	Cache  CacheConfig  `yaml:"cache,omitempty"`
+	Input      InputConfig      `yaml:"input"`
+	Output     OutputConfig     `yaml:"output"`
+	Voice      VoiceConfig      `yaml:"voice,omitempty"`
+	Cache      CacheConfig      `yaml:"cache,omitempty"`
+	Transition TransitionConfig `yaml:"transition,omitempty"`
 }
 
 // InputConfig represents input configuration
@@ -45,6 +46,12 @@ type CacheConfig struct {
 	Directory string `yaml:"directory,omitempty"`
 }
 
+// TransitionConfig represents transition configuration
+type TransitionConfig struct {
+	Type     string  `yaml:"type,omitempty"`     // none, fade, wipeleft, wiperight, etc.
+	Duration float64 `yaml:"duration,omitempty"` // Duration in seconds
+}
+
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
@@ -66,6 +73,10 @@ func DefaultConfig() *Config {
 		Cache: CacheConfig{
 			Enabled:   true,
 			Directory: "./data/cache",
+		},
+		Transition: TransitionConfig{
+			Type:     "none",
+			Duration: 0.5,
 		},
 	}
 }

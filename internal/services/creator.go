@@ -18,6 +18,7 @@ type VideoCreatorConfig struct {
 	OutputLangs      []string
 	GoogleSlidesID   string // Google Slides presentation ID (found in the URL). When empty, uses local slides; when provided, fetches from Google Slides API
 	ProgressCallback interfaces.ProgressCallback
+	Transition       TransitionConfig // Transition configuration for slide transitions
 }
 
 // VideoCreator orchestrates the video creation process
@@ -60,6 +61,14 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 	progress := cfg.ProgressCallback
 	if progress == nil {
 		progress = &interfaces.NoOpProgressCallback{}
+	}
+
+	// Configure video service with transitions if available
+	if videoService, ok := vc.videoService.(*VideoService); ok {
+		if err := cfg.Transition.Validate(); err == nil && cfg.Transition.IsEnabled() {
+			videoService.SetTransition(cfg.Transition)
+			vc.logger.Info("Transitions enabled", "type", cfg.Transition.Type, "duration", cfg.Transition.Duration)
+		}
 	}
 
 	var inputTexts []string

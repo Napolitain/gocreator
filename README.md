@@ -34,6 +34,7 @@ go install github.com/Napolitain/gocreator/cmd/gocreator@latest
 - Automated video creation from slides and text
 - **Video input support** - Use video clips as "slides" with their duration, not just static images
 - **Google Slides API integration** - Fetch slides and speaker notes directly from Google Slides
+- **Video transitions** - Smooth transitions between slides (fade, wipe, slide, etc.)
 - Multi-language support with AI-powered translation
 - Text-to-speech audio generation
 - Intelligent caching to reduce API costs
@@ -257,6 +258,24 @@ See [CACHE_POLICY.md](CACHE_POLICY.md) for detailed documentation.
 - **Performance**: Reuses expensive computations
 - **Reliability**: Works offline for previously processed content
 - **Debugging**: Easier to inspect cached intermediate results
+
+## Video Transitions
+
+GoCreator supports smooth transitions between slides to create professional-looking videos. Configure transitions in your `gocreator.yaml` file:
+
+```yaml
+transition:
+  type: fade      # Options: none, fade, wipe, slide, etc.
+  duration: 0.5   # Duration in seconds (0.0 to 5.0)
+```
+
+**Available transition types**: `none`, `fade`, `dissolve`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`, `slideup`, `slidedown`
+
+See [TRANSITIONS.md](TRANSITIONS.md) for detailed documentation on transitions, including:
+- Complete list of available effects
+- Best practices for different content types
+- Technical details and troubleshooting
+- Advanced usage examples
 
 ## Development
 

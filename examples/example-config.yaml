@@ -51,3 +51,14 @@ cache:
   
   # Cache directory (default: "./data/cache")
   directory: ./data/cache
+
+transition:
+  # Transition type between slides (default: "none")
+  # Options: none, fade, wipeleft, wiperight, wipeup, wipedown,
+  #          slideleft, slideright, slideup, slidedown, dissolve
+  type: fade
+  
+  # Transition duration in seconds (default: 0.5)
+  # Range: 0.0 to 5.0 seconds
+  # Note: Transitions will overlap between slides
+  duration: 0.5

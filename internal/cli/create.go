@@ -166,12 +166,25 @@ func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProg
 		progressCallback = &interfaces.NoOpProgressCallback{}
 	}
 
+	// Convert config transition to services transition
+	transition := services.TransitionConfig{
+		Type:     services.TransitionType(cfg.Transition.Type),
+		Duration: cfg.Transition.Duration,
+	}
+
+	// If transition is not valid, use default (none)
+	if err := transition.Validate(); err != nil {
+		logger.Warn("Invalid transition configuration, using default (none)", "error", err)
+		transition = services.TransitionConfig{Type: services.TransitionNone}
+	}
+
 	creatorCfg := services.VideoCreatorConfig{
 		RootDir:          rootDir,
 		InputLang:        cfg.Input.Lang,
 		OutputLangs:      cfg.Output.Languages,
 		GoogleSlidesID:   cfg.Input.PresentationID,
 		ProgressCallback: progressCallback,
+		Transition:       transition,
 	}
 
 	// Run video creation
