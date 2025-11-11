@@ -7,6 +7,7 @@ import (
 
 	"gocreator/internal/mocks"
 
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -146,4 +147,20 @@ func TestTranslationService_TranslateBatch_WithError(t *testing.T) {
 
 	assert.Error(t, err)
 	mockClient.AssertExpectations(t)
+}
+
+func TestNewTranslationServiceWithCache(t *testing.T) {
+mockClient := new(mocks.MockOpenAIClient)
+logger := &mockLogger{}
+fs := afero.NewMemMapFs()
+cacheDir := "/cache"
+
+service := NewTranslationServiceWithCache(mockClient, logger, fs, cacheDir)
+
+assert.NotNil(t, service)
+assert.Equal(t, mockClient, service.client)
+assert.Equal(t, logger, service.logger)
+assert.Equal(t, fs, service.fs)
+assert.Equal(t, cacheDir, service.cacheDir)
+assert.NotNil(t, service.memoryCache)
 }
