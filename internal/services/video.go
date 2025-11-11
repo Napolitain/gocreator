@@ -482,7 +482,9 @@ func (s *VideoService) computeSegmentHash(slidePath, audioPath string, width, he
 	hasher := sha256.New()
 	hasher.Write(slideData)
 	hasher.Write(audioData)
-	fmt.Fprintf(hasher, "%dx%d", width, height)
+	if _, err := fmt.Fprintf(hasher, "%dx%d", width, height); err != nil {
+		return "", fmt.Errorf("failed to write dimensions to hash: %w", err)
+	}
 	
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
@@ -548,7 +550,9 @@ func (s *VideoService) computeFinalVideoHash(videoFiles []string) (string, error
 	}
 	
 	// Include transition configuration in hash
-	fmt.Fprintf(hasher, "%s:%.2f", s.transition.Type, s.transition.Duration)
+	if _, err := fmt.Fprintf(hasher, "%s:%.2f", s.transition.Type, s.transition.Duration); err != nil {
+		return "", fmt.Errorf("failed to write transition config to hash: %w", err)
+	}
 	
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
