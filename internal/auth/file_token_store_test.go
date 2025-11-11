@@ -22,7 +22,7 @@ func TestFileTokenStore_SaveAndLoadToken(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "token-store-test")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tokenPath := filepath.Join(tmpDir, "token.json")
 	store := NewFileTokenStore(tokenPath)
@@ -59,7 +59,7 @@ func TestFileTokenStore_SaveToken_CreatesDirectory(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir, err := os.MkdirTemp("", "token-store-test")
 	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tokenPath := filepath.Join(tmpDir, "nested", "dir", "token.json")
 	store := NewFileTokenStore(tokenPath)

@@ -27,7 +27,7 @@ func (s *FileTokenStore) LoadToken() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	token := &oauth2.Token{}
 	if err := json.NewDecoder(f).Decode(token); err != nil {
@@ -49,7 +49,7 @@ func (s *FileTokenStore) SaveToken(token *oauth2.Token) error {
 	if err != nil {
 		return fmt.Errorf("failed to create token file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := json.NewEncoder(f).Encode(token); err != nil {
 		return fmt.Errorf("failed to encode token: %w", err)

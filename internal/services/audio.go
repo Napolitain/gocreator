@@ -48,7 +48,7 @@ func (s *AudioService) Generate(ctx context.Context, text, outputPath string) er
 	if err != nil {
 		return fmt.Errorf("failed to generate speech: %w", err)
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	// Ensure directory exists
 	dir := filepath.Dir(outputPath)
@@ -61,7 +61,7 @@ func (s *AudioService) Generate(ctx context.Context, text, outputPath string) er
 	if err != nil {
 		return fmt.Errorf("failed to create audio file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if _, err := io.Copy(file, body); err != nil {
 		return fmt.Errorf("failed to write audio: %w", err)

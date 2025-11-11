@@ -24,10 +24,10 @@ func BenchmarkVideoService_GenerateFromSlides_3Slides(b *testing.B) {
 	for i := 0; i < 3; i++ {
 		slidePath := fmt.Sprintf("/slides/slide_%d.txt", i)
 		audioPath := fmt.Sprintf("/audio/audio_%d.mp3", i)
-		fs.MkdirAll("/slides", 0755)
-		fs.MkdirAll("/audio", 0755)
-		afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d", i)), 0644)
-		afero.WriteFile(fs, audioPath, []byte("audio data"), 0644)
+		_ = fs.MkdirAll("/slides", 0755)
+		_ = fs.MkdirAll("/audio", 0755)
+		_ = afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d", i)), 0644)
+		_ = afero.WriteFile(fs, audioPath, []byte("audio data"), 0644)
 		slides[i] = slidePath
 		audioPaths[i] = audioPath
 	}
@@ -54,10 +54,10 @@ func BenchmarkVideoService_GenerateFromSlides_10Slides(b *testing.B) {
 	for i := 0; i < 10; i++ {
 		slidePath := fmt.Sprintf("/slides/slide_%d.txt", i)
 		audioPath := fmt.Sprintf("/audio/audio_%d.mp3", i)
-		fs.MkdirAll("/slides", 0755)
-		fs.MkdirAll("/audio", 0755)
-		afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d", i)), 0644)
-		afero.WriteFile(fs, audioPath, []byte("audio data"), 0644)
+		_ = fs.MkdirAll("/slides", 0755)
+		_ = fs.MkdirAll("/audio", 0755)
+		_ = afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d", i)), 0644)
+		_ = afero.WriteFile(fs, audioPath, []byte("audio data"), 0644)
 		slides[i] = slidePath
 		audioPaths[i] = audioPath
 	}

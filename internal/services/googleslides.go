@@ -187,7 +187,7 @@ func (s *GoogleSlidesService) downloadImage(ctx context.Context, url, outputPath
 	if err != nil {
 		return fmt.Errorf("failed to download image: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download image: status %d", resp.StatusCode)
@@ -198,7 +198,7 @@ func (s *GoogleSlidesService) downloadImage(ctx context.Context, url, outputPath
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Copy image data to file
 	if _, err := io.Copy(file, resp.Body); err != nil {

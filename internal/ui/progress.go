@@ -76,7 +76,7 @@ var (
 			MarginLeft(2).
 			MarginBottom(1)
 
-	itemStyle = lipgloss.NewStyle().
+	_ = lipgloss.NewStyle().
 			MarginLeft(4)
 
 	progressBarStyle = lipgloss.NewStyle().

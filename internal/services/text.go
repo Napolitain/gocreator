@@ -34,7 +34,7 @@ func (s *TextService) Load(ctx context.Context, path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	texts := make([]string, 0) // Initialize as empty slice to ensure []string{} not nil
 	var current strings.Builder
@@ -78,7 +78,7 @@ func (s *TextService) Save(ctx context.Context, path string, texts []string) err
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for i, text := range texts {
 		if _, err := file.WriteString(text); err != nil {
@@ -111,7 +111,7 @@ func (s *TextService) SaveHashes(ctx context.Context, path string, hashes []stri
 	if err != nil {
 		return fmt.Errorf("failed to create hash file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	for _, hash := range hashes {
 		if _, err := file.WriteString(hash + "\n"); err != nil {
@@ -136,7 +136,7 @@ func (s *TextService) LoadHashes(ctx context.Context, path string) ([]string, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to open hash file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var hashes []string
 	scanner := bufio.NewScanner(file)

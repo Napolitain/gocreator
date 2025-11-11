@@ -252,7 +252,9 @@ func (s *VideoService) getMediaDimensions(mediaPath string) (int, int, error) {
 	}
 
 	var width, height int
-	fmt.Sscanf(matches[0], "%dx%d", &width, &height)
+	if _, err := fmt.Sscanf(matches[0], "%dx%d", &width, &height); err != nil {
+		return 0, 0, fmt.Errorf("failed to parse dimensions: %w", err)
+	}
 
 	return width, height, nil
 }

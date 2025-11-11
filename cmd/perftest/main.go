@@ -102,7 +102,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to create temp directory: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	fs := afero.NewOsFs()
 
@@ -243,7 +243,7 @@ func runRealAPITests(ctx context.Context, fs afero.Fs, dataDir string, results *
 	fmt.Println("------------------------------")
 
 	// Save translation to cache for next run
-	textService.Save(ctx, filepath.Join(dataDir, "cache", "es", "text", "texts.txt"), translatedTexts)
+	_ = textService.Save(ctx, filepath.Join(dataDir, "cache", "es", "text", "texts.txt"), translatedTexts)
 
 	// Measure translation with cache
 	start = time.Now()
@@ -292,11 +292,11 @@ func runRealAPITests(ctx context.Context, fs afero.Fs, dataDir string, results *
 	
 	// Create test slides (simple text files as placeholders)
 	slidesDir := filepath.Join(dataDir, "slides")
-	fs.MkdirAll(slidesDir, 0755)
+	_ = fs.MkdirAll(slidesDir, 0755)
 	testSlides := make([]string, len(testTexts))
 	for i := range testTexts {
 		slidePath := filepath.Join(slidesDir, fmt.Sprintf("slide_%d.txt", i))
-		afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d content", i)), 0644)
+		_ = afero.WriteFile(fs, slidePath, []byte(fmt.Sprintf("Slide %d content", i)), 0644)
 		testSlides[i] = slidePath
 	}
 	
