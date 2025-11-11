@@ -266,3 +266,23 @@ func TestVideoService_saveFinalVideoHash(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, hashData)
 }
+
+func TestVideoService_concatenateVideosWithTransitions_GuardSingleVideo(t *testing.T) {
+fs := afero.NewMemMapFs()
+logger := &mockLogger{}
+service := NewVideoService(fs, logger)
+service.SetTransition(TransitionConfig{Type: TransitionFade, Duration: 0.5})
+
+video1 := "/test/video1.mp4"
+outputPath := "/test/final.mp4"
+
+// Create test video file
+require.NoError(t, afero.WriteFile(fs, video1, []byte("video1 data"), 0644))
+
+videoFiles := []string{video1}
+
+// Should return error when called with single video
+err := service.concatenateVideosWithTransitions(videoFiles, outputPath)
+require.Error(t, err)
+assert.Contains(t, err.Error(), "requires at least 2 videos")
+}

@@ -68,6 +68,12 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 		if err := cfg.Transition.Validate(); err == nil && cfg.Transition.IsEnabled() {
 			videoService.SetTransition(cfg.Transition)
 			vc.logger.Info("Transitions enabled", "type", cfg.Transition.Type, "duration", cfg.Transition.Duration)
+		} else {
+			if err != nil {
+				vc.logger.Warn("Transitions not enabled due to validation failure", "type", cfg.Transition.Type, "duration", cfg.Transition.Duration, "error", err)
+			} else if !cfg.Transition.IsEnabled() {
+				vc.logger.Debug("Transitions are disabled", "type", cfg.Transition.Type)
+			}
 		}
 	}
 

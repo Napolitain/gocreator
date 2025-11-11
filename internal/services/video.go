@@ -297,6 +297,11 @@ func (s *VideoService) concatenateVideosSimple(videoFiles []string, outputPath s
 
 // concatenateVideosWithTransitions concatenates videos with transition effects
 func (s *VideoService) concatenateVideosWithTransitions(videoFiles []string, outputPath string) error {
+	// Guard: This function requires at least 2 videos for transitions
+	if len(videoFiles) < 2 {
+		return fmt.Errorf("concatenateVideosWithTransitions requires at least 2 videos, got %d", len(videoFiles))
+	}
+
 	args := []string{"-y"}
 
 	// Add all video inputs
@@ -320,11 +325,19 @@ func (s *VideoService) concatenateVideosWithTransitions(videoFiles []string, out
 			duration = 5.0 // Default fallback
 		}
 		durations[i] = duration
+		
+		// Warn if transition duration exceeds video duration
+		if transitionDuration >= duration {
+			s.logger.Warn("Transition duration meets or exceeds video duration, may cause unexpected behavior",
+				"video", video,
+				"video_duration", duration,
+				"transition_duration", transitionDuration)
+		}
 	}
 
 	// Generate xfade transitions between consecutive videos
 	currentVideoLabel := "[0:v]"
-	var offset float64 = 0.0
+	offset := 0.0
 
 	for i := 0; i < len(videoFiles)-1; i++ {
 		nextVideoLabel := fmt.Sprintf("[%d:v]", i+1)
@@ -350,9 +363,6 @@ func (s *VideoService) concatenateVideosWithTransitions(videoFiles []string, out
 
 	// Final video output label
 	finalVideoLabel := fmt.Sprintf("[v%d]", len(videoFiles)-2)
-	if len(videoFiles) == 1 {
-		finalVideoLabel = "[0:v]"
-	}
 
 	// Mix audio streams
 	audioMix.WriteString(";")

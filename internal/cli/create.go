@@ -175,7 +175,7 @@ func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProg
 	// If transition is not valid, use default (none)
 	if err := transition.Validate(); err != nil {
 		logger.Warn("Invalid transition configuration, using default (none)", "error", err)
-		transition = services.TransitionConfig{Type: services.TransitionNone}
+		transition = services.TransitionConfig{Type: services.TransitionNone, Duration: 0.0}
 	}
 
 	creatorCfg := services.VideoCreatorConfig{

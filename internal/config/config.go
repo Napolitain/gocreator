@@ -76,7 +76,7 @@ func DefaultConfig() *Config {
 		},
 		Transition: TransitionConfig{
 			Type:     "none",
-			Duration: 0.5,
+			Duration: 0.0,
 		},
 	}
 }
