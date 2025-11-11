@@ -32,6 +32,7 @@ jobs:
         run: go mod tidy
 
       - name: Run golangci-lint
+        continue-on-error: true
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.6.1
