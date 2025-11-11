@@ -1,5 +1,9 @@
 # GoCreator - Video Creation Tool
 
+[![CI](https://github.com/Napolitain/gocreator/actions/workflows/ci.yml/badge.svg)](https://github.com/Napolitain/gocreator/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Napolitain/gocreator/branch/main/graph/badge.svg)](https://codecov.io/gh/Napolitain/gocreator)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Napolitain/gocreator)](https://goreportcard.com/report/github.com/Napolitain/gocreator)
+
 A CLI tool for creating videos with translations and audio narration.
 
 > 📋 **Roadmap**: See our [Roadmap Summary](./ROADMAP_SUMMARY.md) or [Full Improvement Plan](./IMPROVEMENTS_ROADMAP.md) for future features and enhancements.

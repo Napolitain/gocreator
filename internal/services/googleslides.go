@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,12 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"gocreator/internal/auth"
 	"gocreator/internal/interfaces"
 
 	"github.com/spf13/afero"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/option"
 	"google.golang.org/api/slides/v1"
 )
 
@@ -29,8 +26,9 @@ const (
 
 // GoogleSlidesService handles fetching slides and notes from Google Slides
 type GoogleSlidesService struct {
-	fs     afero.Fs
-	logger interfaces.Logger
+	fs                 afero.Fs
+	logger             interfaces.Logger
+	credentialsProvider auth.CredentialsProvider
 }
 
 // NewGoogleSlidesService creates a new Google Slides service
@@ -38,6 +36,15 @@ func NewGoogleSlidesService(fs afero.Fs, logger interfaces.Logger) *GoogleSlides
 	return &GoogleSlidesService{
 		fs:     fs,
 		logger: logger,
+	}
+}
+
+// NewGoogleSlidesServiceWithAuth creates a new Google Slides service with authentication provider
+func NewGoogleSlidesServiceWithAuth(fs afero.Fs, logger interfaces.Logger, credentialsProvider auth.CredentialsProvider) *GoogleSlidesService {
+	return &GoogleSlidesService{
+		fs:                  fs,
+		logger:              logger,
+		credentialsProvider: credentialsProvider,
 	}
 }
 
@@ -94,20 +101,66 @@ func (s *GoogleSlidesService) LoadFromGoogleSlides(ctx context.Context, presenta
 }
 
 // createSlidesService creates a Google Slides API service with credentials
-// Supports both OAuth 2.0 (user authorization) and service account credentials
 func (s *GoogleSlidesService) createSlidesService(ctx context.Context) (*slides.Service, error) {
-	// Try OAuth 2.0 credentials first (for user authorization)
+	// If a credentials provider is injected, use it
+	if s.credentialsProvider != nil {
+		clientOption, err := s.credentialsProvider.GetClientOption(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client option from credentials provider: %w", err)
+		}
+		service, err := slides.NewService(ctx, clientOption)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create slides service: %w", err)
+		}
+		return service, nil
+	}
+
+	// Fallback to environment variable-based auth for backward compatibility
+	return s.createSlidesServiceFromEnv(ctx)
+}
+
+// createSlidesServiceFromEnv creates a Google Slides API service using environment variables
+// This method is kept for backward compatibility
+func (s *GoogleSlidesService) createSlidesServiceFromEnv(ctx context.Context) (*slides.Service, error) {
+	// Try OAuth 2.0 credentials first
 	oauthCredPath := os.Getenv("GOOGLE_OAUTH_CREDENTIALS")
 	if oauthCredPath != "" {
-		s.logger.Debug("Using OAuth 2.0 credentials", "path", oauthCredPath)
-		return s.createSlidesServiceWithOAuth(ctx, oauthCredPath)
+		s.logger.Debug("Using OAuth 2.0 credentials from environment", "path", oauthCredPath)
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user home directory: %w", err)
+		}
+		tokenPath := filepath.Join(homeDir, ".config", "gocreator", tokenFile)
+
+		tokenStore := auth.NewFileTokenStore(tokenPath)
+		authorizer := auth.NewConsoleAuthorizer()
+		scopes := []string{
+			"https://www.googleapis.com/auth/presentations",
+			"https://www.googleapis.com/auth/drive.file",
+		}
+		provider := auth.NewOAuth2Provider(oauthCredPath, tokenStore, authorizer, s.logger, scopes)
+
+		clientOption, err := provider.GetClientOption(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get OAuth client option: %w", err)
+		}
+		service, err := slides.NewService(ctx, clientOption)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create slides service with OAuth: %w", err)
+		}
+		return service, nil
 	}
 
 	// Fall back to service account credentials
 	credentialsPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credentialsPath != "" {
-		s.logger.Debug("Using service account credentials", "path", credentialsPath)
-		service, err := slides.NewService(ctx, option.WithCredentialsFile(credentialsPath))
+		s.logger.Debug("Using service account credentials from environment", "path", credentialsPath)
+		provider := auth.NewServiceAccountProvider(credentialsPath)
+		clientOption, err := provider.GetClientOption(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get service account client option: %w", err)
+		}
+		service, err := slides.NewService(ctx, clientOption)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create slides service with service account: %w", err)
 		}
@@ -115,152 +168,6 @@ func (s *GoogleSlidesService) createSlidesService(ctx context.Context) (*slides.
 	}
 
 	return nil, fmt.Errorf("no Google credentials found. Set either GOOGLE_OAUTH_CREDENTIALS (for OAuth 2.0) or GOOGLE_APPLICATION_CREDENTIALS (for service account). See GOOGLE_SLIDES_GUIDE.md for setup instructions")
-}
-
-// createSlidesServiceWithOAuth creates a Google Slides API service using OAuth 2.0
-func (s *GoogleSlidesService) createSlidesServiceWithOAuth(ctx context.Context, credentialsPath string) (*slides.Service, error) {
-	// Read OAuth 2.0 credentials file (client ID and secret)
-	credData, err := os.ReadFile(credentialsPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read OAuth credentials file: %w", err)
-	}
-
-	// Parse OAuth 2.0 config
-	config, err := google.ConfigFromJSON(credData,
-		"https://www.googleapis.com/auth/presentations",
-		"https://www.googleapis.com/auth/drive.file",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse OAuth credentials: %w", err)
-	}
-
-	// Get or refresh access token
-	token, err := s.getToken(ctx, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get OAuth token: %w", err)
-	}
-
-	// Create HTTP client with token
-	client := config.Client(ctx, token)
-
-	// Create Google Slides service
-	service, err := slides.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create slides service with OAuth: %w", err)
-	}
-
-	return service, nil
-}
-
-// getToken retrieves a token from file or initiates OAuth flow
-func (s *GoogleSlidesService) getToken(ctx context.Context, config *oauth2.Config) (*oauth2.Token, error) {
-	// Try to load token from file
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
-	}
-
-	tokenPath := filepath.Join(homeDir, ".config", "gocreator", tokenFile)
-	token, err := s.loadToken(tokenPath)
-	if err == nil {
-		// Token loaded successfully, check if it's valid or refresh it
-		if token.Valid() {
-			s.logger.Debug("Using cached OAuth token")
-			return token, nil
-		}
-
-		// Try to refresh the token
-		s.logger.Debug("Refreshing OAuth token")
-		tokenSource := config.TokenSource(ctx, token)
-		newToken, err := tokenSource.Token()
-		if err == nil {
-			// Save refreshed token
-			if saveErr := s.saveToken(tokenPath, newToken); saveErr != nil {
-				s.logger.Error("Failed to save refreshed token", "error", saveErr)
-			}
-			return newToken, nil
-		}
-		s.logger.Debug("Failed to refresh token, will request new authorization", "error", err)
-	}
-
-	// No valid token, initiate OAuth flow
-	s.logger.Info("No valid OAuth token found. Initiating authorization flow...")
-	token, err = s.getTokenFromWeb(ctx, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token from web: %w", err)
-	}
-
-	// Save token for future use
-	if err := s.saveToken(tokenPath, token); err != nil {
-		s.logger.Error("Failed to save OAuth token", "error", err)
-	}
-
-	return token, nil
-}
-
-// getTokenFromWeb initiates the OAuth 2.0 authorization flow
-func (s *GoogleSlidesService) getTokenFromWeb(ctx context.Context, config *oauth2.Config) (*oauth2.Token, error) {
-	// Generate authorization URL
-	authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-
-	fmt.Printf("\n🔐 Google Slides Authorization Required\n")
-	fmt.Printf("═══════════════════════════════════════\n\n")
-	fmt.Printf("Please visit this URL to authorize this application:\n\n")
-	fmt.Printf("%s\n\n", authURL)
-	fmt.Printf("After authorization, you will receive an authorization code.\n")
-	fmt.Printf("Enter the authorization code here: ")
-
-	var authCode string
-	if _, err := fmt.Scan(&authCode); err != nil {
-		return nil, fmt.Errorf("failed to read authorization code: %w", err)
-	}
-
-	// Exchange authorization code for token
-	token, err := config.Exchange(ctx, authCode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to exchange authorization code for token: %w", err)
-	}
-
-	fmt.Printf("\n✓ Authorization successful!\n\n")
-
-	return token, nil
-}
-
-// loadToken loads an OAuth token from a file
-func (s *GoogleSlidesService) loadToken(path string) (*oauth2.Token, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	token := &oauth2.Token{}
-	if err := json.NewDecoder(f).Decode(token); err != nil {
-		return nil, err
-	}
-
-	return token, nil
-}
-
-// saveToken saves an OAuth token to a file
-func (s *GoogleSlidesService) saveToken(path string, token *oauth2.Token) error {
-	// Create directory if it doesn't exist
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("failed to create token directory: %w", err)
-	}
-
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to create token file: %w", err)
-	}
-	defer f.Close()
-
-	if err := json.NewEncoder(f).Encode(token); err != nil {
-		return fmt.Errorf("failed to encode token: %w", err)
-	}
-
-	return nil
 }
 
 // downloadImage downloads an image from a URL and saves it to the filesystem
