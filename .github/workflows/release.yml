@@ -61,6 +61,12 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.6.1
+          args: --timeout=5m
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}

@@ -1,0 +1,79 @@
+# golangci-lint configuration for gocreator
+# https://golangci-lint.run/usage/configuration/
+
+version: 2
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    # Default linters
+    - errcheck      # Check for unchecked errors
+    - govet         # Vet examines Go source code
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced Go linter
+    - unused        # Check for unused code
+    
+    # Additional recommended linters
+    - misspell      # Find commonly misspelled words
+    - revive        # Fast, configurable, extensible linter
+    - gosec         # Security-focused linter
+    - gocritic      # Comprehensive linter with many checks
+    - gocyclo       # Cyclomatic complexity
+    - unconvert     # Remove unnecessary type conversions
+    - unparam       # Find unused function parameters
+    - bodyclose     # Check HTTP response body is closed
+    - errorlint     # Find code issues with error wrapping
+    - nilerr        # Find returns nil even if error is not nil
+
+formatters:
+  enable:
+    - gofmt         # Check code formatting
+    - goimports     # Check import formatting
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnamedResult
+      - hugeParam
+  
+  revive:
+    rules:
+      - name: exported
+        disabled: false
+        arguments:
+          - "checkPrivateReceivers"
+          - "disableStutteringCheck"
+  
+  gosec:
+    excludes:
+      - G104 # Audit errors not checked (already covered by errcheck)
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - gosec
+    
+    # Exclude known issues in generated files
+    - path: internal/mocks/
+      linters:
+        - all
+  
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  formats:
+    colored-line-number: {}
+  sort-results: true

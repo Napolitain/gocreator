@@ -31,6 +31,19 @@ jobs:
       - name: Install dependencies
         run: go mod tidy
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.6.1
+          args: --timeout=5m --out-format=colored-line-number,checkstyle:golangci-lint-report.xml
+
+      - name: Upload golangci-lint report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: golangci-lint-report
+          path: golangci-lint-report.xml
+
       - name: Run tests with coverage
         run: go test -v -coverprofile=coverage.out -covermode=atomic ./...
 
