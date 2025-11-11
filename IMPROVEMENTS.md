@@ -1,5 +1,7 @@
 # Code Quality Improvements Summary
 
+> **Note**: For a comprehensive feature improvement roadmap, see [IMPROVEMENTS_ROADMAP.md](./IMPROVEMENTS_ROADMAP.md)
+
 This document summarizes all the code quality improvements made to the gocreator project.
 
 ## Issues Addressed

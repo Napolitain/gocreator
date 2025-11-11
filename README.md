@@ -317,16 +317,32 @@ func TestSubtitleService_Generate(t *testing.T) {
 
 ## Future Improvements
 
-Potential enhancements:
+> **📋 Full Roadmap**: See [IMPROVEMENTS_ROADMAP.md](./IMPROVEMENTS_ROADMAP.md) for a comprehensive improvement plan covering usability, features, platforms, and technical enhancements.
 
-1. **Integration Tests**: End-to-end tests with test fixtures
-2. **Performance Benchmarks**: Benchmark critical paths
-3. **Metrics & Monitoring**: Track cache hit rates, API costs
-4. **Configuration File**: YAML/JSON config instead of CLI flags
-5. **Plugin System**: Extensible architecture for custom processors
-6. **Parallel Language Processing**: Process multiple languages concurrently
-7. **Resume Support**: Resume interrupted video creation
-8. **Quality Profiles**: Different quality/speed tradeoffs
+Key areas for future development:
+
+### High Priority
+1. **Subtitle Support**: Automatic subtitle generation in multiple formats (SRT, VTT)
+2. **Configuration Files**: YAML/JSON config for easier project management
+3. **Multiple Voice Options**: Choose from different TTS voices and providers
+4. **Better Error Messages**: User-friendly errors with actionable solutions
+5. **Progress Indicators**: Rich progress bars and status updates
+
+### Medium Priority
+6. **PowerPoint Support**: Direct .pptx file support
+7. **Resume Support**: Resume interrupted video creation jobs
+8. **Quality Profiles**: Preset quality configurations (low, medium, high, ultra)
+9. **Dry Run Mode**: Preview costs and outputs before processing
+10. **Alternative TTS Providers**: Support for Google, AWS, Azure, ElevenLabs
+
+### Also Planned
+- Background music support
+- Video transitions and effects
+- YouTube/social media integration
+- Batch processing
+- Plugin system for extensibility
+- API and webhooks
+- Advanced caching strategies
 
 ## Contributing
 
