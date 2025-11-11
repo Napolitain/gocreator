@@ -2,6 +2,8 @@
 
 A CLI tool for creating videos with translations and audio narration.
 
+> 📋 **Roadmap**: See our [Roadmap Summary](./ROADMAP_SUMMARY.md) or [Full Improvement Plan](./IMPROVEMENTS_ROADMAP.md) for future features and enhancements.
+
 ## Installation
 
 ### Pre-built Binaries
