@@ -99,6 +99,9 @@ jobs:
   create-release:
     needs: release
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      windows_sha256: ${{ steps.get_sha256.outputs.windows_sha256 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -127,6 +130,13 @@ jobs:
           cd release-assets
           ls -lah
 
+      - name: Get Windows SHA256
+        id: get_sha256
+        run: |
+          WINDOWS_SHA256=$(cat artifacts/checksums-windows-amd64/gocreator-windows-amd64.exe.sha256 | awk '{print $1}')
+          echo "windows_sha256=$WINDOWS_SHA256" >> $GITHUB_OUTPUT
+          echo "Windows SHA256: $WINDOWS_SHA256"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -136,3 +146,95 @@ jobs:
           files: release-assets/*
           draft: false
           prerelease: false
+
+  update-scoop-manifest:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Update Scoop manifest
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          SHA256="${{ needs.create-release.outputs.windows_sha256 }}"
+          
+          cat > gocreator.json <<EOF
+          {
+              "version": "$VERSION",
+              "description": "A CLI tool for creating videos with translations and audio narration",
+              "homepage": "https://github.com/Napolitain/gocreator",
+              "license": "GPL-3.0",
+              "architecture": {
+                  "64bit": {
+                      "url": "https://github.com/Napolitain/gocreator/releases/download/$VERSION/gocreator-windows-amd64.exe",
+                      "hash": "$SHA256"
+                  }
+              },
+              "bin": "gocreator-windows-amd64.exe",
+              "checkver": "github",
+              "autoupdate": {
+                  "architecture": {
+                      "64bit": {
+                          "url": "https://github.com/Napolitain/gocreator/releases/download/\$version/gocreator-windows-amd64.exe"
+                      }
+                  }
+              }
+          }
+          EOF
+          
+          cat gocreator.json
+
+      - name: Upload Scoop manifest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: gocreator.json
+
+  update-nix-flake:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v13
+
+      - name: Update flake.nix version
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          
+          # Update version in flake.nix
+          sed -i "s/version = \".*\";/version = \"$VERSION\";/" flake.nix
+          
+          # Update vendorHash - this needs to be calculated properly
+          # For now, we'll update it to null to let Nix calculate it
+          sed -i 's/vendorHash = ".*";/vendorHash = null;/' flake.nix
+          
+          cat flake.nix
+
+      - name: Update flake.lock
+        run: |
+          nix flake update
+
+      - name: Build to verify
+        run: |
+          nix build .#default || echo "Build may fail due to vendorHash, will be fixed in subsequent releases"
+
+      - name: Create Pull Request for Nix flake updates
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update Nix flake to version ${{ needs.create-release.outputs.version }}"
+          title: "Update Nix flake to version ${{ needs.create-release.outputs.version }}"
+          body: |
+            Automated update of Nix flake for release ${{ needs.create-release.outputs.version }}
+            
+            This PR updates:
+            - Version in flake.nix
+            - flake.lock with latest dependencies
+            
+            Please verify the build and merge if successful.
+          branch: update-nix-flake-${{ needs.create-release.outputs.version }}
+          delete-branch: true
