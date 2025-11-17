@@ -19,7 +19,12 @@
 
           src = ./.;
 
-          vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+          # To update this hash:
+          # 1. Set to pkgs.lib.fakeHash
+          # 2. Run: nix build .#default
+          # 3. Copy the correct hash from the error message
+          # 4. Update this value
+          vendorHash = "sha256-4IeBrBnmi4egCrR7dxs/mnOQ54H8kXfD7oQqIvs9kkM=";
 
           ldflags = [
             "-s"

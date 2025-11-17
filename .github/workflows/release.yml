@@ -197,6 +197,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          ref: main
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v13
@@ -208,19 +210,27 @@ jobs:
           # Update version in flake.nix
           sed -i "s/version = \".*\";/version = \"$VERSION\";/" flake.nix
           
-          # Update vendorHash - this needs to be calculated properly
-          # For now, we'll update it to null to let Nix calculate it
-          sed -i 's/vendorHash = ".*";/vendorHash = null;/' flake.nix
-          
+          echo "Updated flake.nix:"
           cat flake.nix
 
       - name: Update flake.lock
         run: |
           nix flake update
 
-      - name: Build to verify
+      - name: Test build with Nix
         run: |
-          nix build .#default || echo "Build may fail due to vendorHash, will be fixed in subsequent releases"
+          # Try building with updated flake
+          # If vendorHash is incorrect, this will fail but provide the correct hash
+          nix build .#default 2>&1 | tee build.log || true
+          
+          # Check if build succeeded
+          if [ -e result ]; then
+            echo "Build succeeded!"
+            ./result/bin/gocreator --help || true
+          else
+            echo "Build failed. Check logs above for correct vendorHash."
+            echo "This is expected on first run and will be fixed in the PR."
+          fi
 
       - name: Create Pull Request for Nix flake updates
         uses: peter-evans/create-pull-request@v7
@@ -232,9 +242,19 @@ jobs:
             Automated update of Nix flake for release ${{ needs.create-release.outputs.version }}
             
             This PR updates:
-            - Version in flake.nix
+            - Version in flake.nix to `${{ needs.create-release.outputs.version }}`
             - flake.lock with latest dependencies
             
-            Please verify the build and merge if successful.
+            **Note:** If the build fails due to vendorHash mismatch, please update the `vendorHash` in flake.nix with the correct hash from the build error message.
+            
+            To test locally:
+            ```bash
+            nix build .#default
+            ```
+            
+            To calculate the correct vendorHash if needed:
+            ```bash
+            nix-prefetch-url --unpack https://github.com/Napolitain/gocreator/archive/${{ needs.create-release.outputs.version }}.tar.gz
+            ```
           branch: update-nix-flake-${{ needs.create-release.outputs.version }}
           delete-branch: true
