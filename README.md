@@ -10,6 +10,48 @@ A CLI tool for creating videos with translations and audio narration.
 
 ## Installation
 
+### Package Managers
+
+#### Scoop (Windows)
+
+```powershell
+# Add the bucket (first time only)
+scoop bucket add napolitain https://github.com/Napolitain/gocreator
+
+# Install gocreator
+scoop install gocreator
+```
+
+Or install directly from the manifest:
+
+```powershell
+scoop install https://github.com/Napolitain/gocreator/releases/latest/download/gocreator.json
+```
+
+#### Nix (Linux/macOS)
+
+With Nix flakes enabled:
+
+```bash
+# Try without installing
+nix run github:Napolitain/gocreator
+
+# Install to your profile
+nix profile install github:Napolitain/gocreator
+
+# Or add to your flake.nix inputs
+```
+
+Add to your `flake.nix`:
+
+```nix
+{
+  inputs = {
+    gocreator.url = "github:Napolitain/gocreator";
+  };
+}
+```
+
 ### Pre-built Binaries
 
 Download the latest release for your platform from the [Releases page](https://github.com/Napolitain/gocreator/releases).

@@ -1,0 +1,21 @@
+{
+    "version": "0.0.0",
+    "description": "A CLI tool for creating videos with translations and audio narration",
+    "homepage": "https://github.com/Napolitain/gocreator",
+    "license": "GPL-3.0",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/Napolitain/gocreator/releases/download/0.0.0/gocreator-windows-amd64.exe",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+    },
+    "bin": "gocreator-windows-amd64.exe",
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/Napolitain/gocreator/releases/download/$version/gocreator-windows-amd64.exe"
+            }
+        }
+    }
+}
