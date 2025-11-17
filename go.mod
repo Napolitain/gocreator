@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/goccy/go-yaml v1.18.0
 	github.com/joho/godotenv v1.5.1
-	github.com/openai/openai-go/v3 v3.7.0
+	github.com/openai/openai-go/v3 v3.8.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.1
