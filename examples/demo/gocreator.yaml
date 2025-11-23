@@ -1,0 +1,18 @@
+input:
+  lang: en
+  source: local
+output:
+  languages:
+  - en
+  directory: ./data/out
+  format: mp4
+  quality: medium
+voice:
+  model: tts-1-hd
+  voice: alloy
+  speed: 1.0
+cache:
+  enabled: true
+  directory: ./data/cache
+transition:
+  type: none

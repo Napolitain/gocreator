@@ -1,0 +1,224 @@
+# Advanced GoCreator Configuration
+# This example demonstrates all available video editing features
+
+input:
+  lang: en
+  source: local
+  # presentation_id: "YOUR_GOOGLE_SLIDES_ID"  # For Google Slides source
+
+output:
+  languages:
+    - en
+    - fr
+    - es
+  directory: ./data/out
+  
+  # Multi-format export
+  formats:
+    - type: mp4
+      resolution: 1920x1080
+      quality: high
+    - type: webm
+      resolution: 1920x1080
+      codec: libvpx-vp9
+    - type: gif
+      resolution: 640x480
+      fps: 15
+      optimize: true
+
+voice:
+  model: tts-1-hd
+  voice: alloy
+  speed: 1.0
+  
+  # Per-language voice customization
+  per_language:
+    en:
+      voice: alloy
+      speed: 1.0
+    fr:
+      voice: nova
+      speed: 0.95
+    es:
+      voice: shimmer
+      speed: 1.05
+
+cache:
+  enabled: true
+  directory: ./data/cache
+
+# ========================================
+# Video Editing Features
+# ========================================
+
+# Encoding settings for quality control
+encoding:
+  video:
+    codec: libx264        # libx264, libx265, libvpx-vp9
+    preset: medium        # ultrafast, fast, medium, slow, veryslow
+    crf: 23              # 0-51 (lower = better quality, bigger file)
+    bitrate: auto
+    fps: 30
+    pixel_format: yuv420p
+    
+  audio:
+    codec: aac
+    bitrate: 192k
+    sample_rate: 48000
+
+# Transitions between slides
+transition:
+  type: fade             # none, fade, dissolve, wipeleft, wiperight, etc.
+  duration: 0.5          # seconds
+  
+  # Per-slide custom transitions (optional)
+  # per_slide:
+  #   - slides: 0-1
+  #     type: circlecrop
+  #     duration: 0.8
+  #   - slides: 2-3
+  #     type: smoothleft
+  #     duration: 0.5
+
+# Visual effects
+effects:
+  # Ken Burns effect (zoom and pan on images)
+  - type: ken-burns
+    slides: [0, 2, 4]    # Apply to slides 0, 2, and 4
+    zoom_start: 1.0
+    zoom_end: 1.2
+    direction: random    # left, right, up, down, center, random
+  
+  # Watermark/Text overlay
+  - type: text-overlay
+    slides: all          # Apply to all slides
+    text: "© 2025 Your Company"
+    position: bottom-right
+    offset_x: 10
+    offset_y: 10
+    font: Arial
+    font_size: 20
+    color: white
+    outline_color: black
+    outline_width: 2
+    background_opacity: 0.3
+  
+  # Color grading (optional)
+  # - type: color-grade
+  #   slides: all
+  #   brightness: 0.05
+  #   contrast: 1.1
+  #   saturation: 1.15
+  
+  # Vignette effect (optional)
+  # - type: vignette
+  #   slides: all
+  #   intensity: 0.3
+
+# Audio settings
+audio:
+  # Background music
+  background_music:
+    enabled: true
+    file: assets/music/background.mp3
+    volume: 0.15         # 0.0 to 1.0 (relative to narration)
+    fade_in: 2.0         # Fade in over 2 seconds
+    fade_out: 3.0        # Fade out over 3 seconds
+    loop: true           # Loop if music is shorter than video
+  
+  # Sound effects per slide (optional)
+  # sound_effects:
+  #   - slide: 0
+  #     file: assets/sounds/whoosh.mp3
+  #     delay: 0.5       # Play 0.5s after slide starts
+  #     volume: 0.5
+  
+  # Audio ducking (lower music during speech) (optional)
+  # ducking:
+  #   enabled: true
+  #   threshold: -30     # dB
+  #   ratio: 0.3        # Reduce music to 30% during speech
+  #   attack: 0.5
+  #   release: 1.0
+
+# Subtitles
+subtitles:
+  enabled: true
+  generate: true         # Auto-generate from narration text
+  languages: all         # all, or [en, fr, es]
+  burn_in: true          # Embed in video (false = external .srt files)
+  
+  style:
+    font: Arial
+    font_size: 24
+    bold: false
+    color: white
+    outline_color: black
+    outline_width: 2
+    background_color: black
+    background_opacity: 0.5
+    position: bottom
+    alignment: center
+    margin_vertical: 20
+  
+  timing:
+    max_chars_per_line: 42
+    max_lines: 2
+    min_duration: 1.0
+    max_duration: 7.0
+
+# Intro video (optional)
+# intro:
+#   enabled: true
+#   video: assets/intro.mp4
+#   transition: fade
+#   transition_duration: 0.5
+
+# Outro video (optional)
+# outro:
+#   enabled: true
+#   video: assets/outro.mp4
+#   transition: dissolve
+#   transition_duration: 0.7
+
+# Timing controls (optional)
+# timing:
+#   per_slide:
+#     - slide: 2
+#       speed: 1.5       # 1.5x faster (timelapse effect)
+#     - slide: 4
+#       speed: 0.5       # 0.5x slower (slow motion)
+#   
+#   default_image_duration: auto
+#   min_slide_duration: 2.0
+#   max_slide_duration: 30.0
+
+# Chapter markers (for YouTube, etc.)
+# chapters:
+#   enabled: true
+#   markers:
+#     - slide: 0
+#       title: "Introduction"
+#     - slide: 2
+#       title: "Key Features"
+#     - slide: 4
+#       title: "Demo"
+#     - slide: 6
+#       title: "Conclusion"
+
+# Video metadata
+metadata:
+  title: "My Amazing Video"
+  description: "Created with GoCreator"
+  author: "Your Name"
+  copyright: "© 2025 Your Company"
+  tags:
+    - tutorial
+    - demo
+  category: Education
+  
+  # Thumbnail generation
+  thumbnail:
+    enabled: true
+    source: slide
+    slide_index: 0

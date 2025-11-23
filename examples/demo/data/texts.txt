@@ -1,0 +1,41 @@
+GoCreator is an automated video creation tool built as a command-line application. It transforms slides and text into professional presentation videos with multi-language support and AI-powered narration.
+-
+The challenge with creating presentation videos manually is that it's time-consuming, translating content into multiple languages is expensive, and regenerating videos after small changes wastes significant resources and money.
+-
+GoCreator automates the entire pipeline. You write your text once, and it generates videos in multiple languages automatically. An intelligent caching system eliminates redundant API calls and processing. The command-line interface is designed for efficiency and automation workflows.
+-
+The workflow is straightforward. Place your slides as images or videos in a data directory. Write your narration text separated by dashes for each slide. Run a single command specifying your source and target languages. GoCreator handles translation, text-to-speech generation, and video encoding automatically.
+-
+Core features include multi-language support with AI-powered translation using OpenAI's API. Text-to-speech audio generation synchronizes perfectly with video timing. The tool supports both static images and video clips as slides, and you can mix them freely in the same presentation.
+-
+Google Slides integration allows you to fetch slides and speaker notes directly from your presentations. It supports OAuth authentication for personal use and service accounts for CI/CD pipelines. Slides are automatically downloaded as images and speaker notes become the narration text, creating a seamless workflow.
+-
+For video and image support, static images use the audio duration for timing, while video clips maintain their original duration with synchronized audio at the beginning. You can mix images and videos in the same presentation. Supported formats include PNG, JPEG, MP4, MOV, AVI, MKV, and WEBM.
+-
+The caching architecture is multi-layered and intelligent. Translation cache stores OpenAI API responses organized by language. Audio cache uses SHA256 hashes to detect when text content changes. Video segment cache stores intermediate processing results. In-memory cache with time-to-live handles runtime optimization. This results in massive cost savings and dramatic performance improvements.
+-
+Caching matters because OpenAI API calls cost real money with every request. FFmpeg video encoding is computationally expensive and time-consuming. Small text changes shouldn't require regenerating everything from scratch. Cache invalidation happens automatically based on content hashes, and the tool can work offline for previously processed content.
+-
+The architecture follows clean design principles. Built with dependency injection and interface-based design, there are three clear layers: CLI for user interaction, services for business logic, and adapters for external APIs. All external dependencies are mockable for testing, and services follow the single responsibility principle.
+-
+The technology stack includes Go for performance and reliability, FFmpeg for video processing, OpenAI API for translations and text-to-speech, Google Slides API for presentation integration, Cobra framework for the command-line interface, and Afero for testable filesystem operations.
+-
+Testing is comprehensive. Unit tests provide full mock coverage of all services. Fuzz testing helps discover edge cases with random inputs. Benchmark tests measure cache performance improvements. A dedicated performance testing tool provides real-world metrics. The CI/CD pipeline runs automated testing with code coverage reporting through Codecov.
+-
+Video transitions create professional-looking results. Ten transition effects are available including fade, dissolve, wipe in four directions, and slide in four directions. Duration is configurable from zero to five seconds through a YAML configuration file.
+-
+Performance results speak for themselves. Cache hits eliminate API calls entirely. Typical re-runs are ten to one hundred times faster than the first run. Hash validation ensures cache accuracy and automatic invalidation. Parallel processing maximizes throughput. Real-world benchmarks are included in the codebase.
+-
+Real-world applications include product demo videos for multiple international markets, educational content with multilingual support, marketing presentations with professional quality, documentation videos versioned alongside your code, and internal training materials that can be easily updated and distributed.
+-
+The development workflow is simple. Create your slides in Google Slides or as local files. Write speaker notes or a text file with narration. Configure your target languages in the command. Run gocreator create. Output videos are generated in all target languages simultaneously.
+-
+The project uses calendar versioning with the format year-month-day. Each release is tagged with its creation date, making it easy to understand release age and plan upgrades. The versioning scheme is predictable and straightforward.
+-
+Project statistics show it's written in Go version 1.24 with over twenty service modules, each with comprehensive tests. It supports more than ten video transition types and integrates with both OpenAI and Google APIs. Active CI/CD runs through GitHub Actions with code coverage tracking.
+-
+The future roadmap includes subtitle generation in SRT and VTT formats, multiple text-to-speech voice options and providers, direct PowerPoint file support, resume capability for interrupted jobs, background music integration, and quality preset profiles for different use cases.
+-
+GoCreator is open source under the GPL version 3 license. Contributions are welcome with clear contributing guidelines. Development is active and ongoing. Comprehensive documentation covers all features and use cases. The project is available on GitHub under the repository Napolitain slash gocreator.
+-
+Getting started is easy. Download pre-built binaries from the releases page for your platform, or install from source using go install. Check the examples directory for hands-on tutorials. Set your OpenAI API key as an environment variable. Optionally configure Google Slides credentials for integration. You can run your first video creation in just a few minutes.

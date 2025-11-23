@@ -1,0 +1,16 @@
+# GoCreator outputs and cache
+data/out/
+data/cache/
+*.mp4
+*.mp3
+*.wav
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo

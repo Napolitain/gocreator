@@ -16,6 +16,16 @@ type Config struct {
 	Voice      VoiceConfig      `yaml:"voice,omitempty"`
 	Cache      CacheConfig      `yaml:"cache,omitempty"`
 	Transition TransitionConfig `yaml:"transition,omitempty"`
+	Encoding   EncodingConfig   `yaml:"encoding,omitempty"`
+	Effects    []EffectConfig   `yaml:"effects,omitempty"`
+	Audio      AudioConfig      `yaml:"audio,omitempty"`
+	Subtitles  SubtitlesConfig  `yaml:"subtitles,omitempty"`
+	Intro      IntroConfig      `yaml:"intro,omitempty"`
+	Outro      OutroConfig      `yaml:"outro,omitempty"`
+	Timing     TimingConfig     `yaml:"timing,omitempty"`
+	Pip        PipConfig        `yaml:"pip,omitempty"`
+	Chapters   ChaptersConfig   `yaml:"chapters,omitempty"`
+	Metadata   MetadataConfig   `yaml:"metadata,omitempty"`
 }
 
 // InputConfig represents input configuration
@@ -27,17 +37,35 @@ type InputConfig struct {
 
 // OutputConfig represents output configuration
 type OutputConfig struct {
-	Languages []string `yaml:"languages"`
-	Directory string   `yaml:"directory,omitempty"`
-	Format    string   `yaml:"format,omitempty"`    // mp4, webm, etc
-	Quality   string   `yaml:"quality,omitempty"`   // low, medium, high, ultra
+	Languages []string       `yaml:"languages"`
+	Directory string         `yaml:"directory,omitempty"`
+	Format    string         `yaml:"format,omitempty"` // mp4, webm, etc
+	Quality   string         `yaml:"quality,omitempty"` // low, medium, high, ultra
+	Formats   []FormatConfig `yaml:"formats,omitempty"` // Multi-format export
+}
+
+// FormatConfig represents a format export configuration
+type FormatConfig struct {
+	Type       string `yaml:"type"`       // mp4, webm, gif
+	Resolution string `yaml:"resolution"` // 1920x1080, 1280x720, etc
+	Quality    string `yaml:"quality,omitempty"`
+	Codec      string `yaml:"codec,omitempty"`
+	FPS        int    `yaml:"fps,omitempty"`
+	Optimize   bool   `yaml:"optimize,omitempty"`
 }
 
 // VoiceConfig represents TTS voice configuration
 type VoiceConfig struct {
-	Model string  `yaml:"model,omitempty"` // tts-1, tts-1-hd
-	Voice string  `yaml:"voice,omitempty"` // alloy, echo, fable, onyx, nova, shimmer
-	Speed float64 `yaml:"speed,omitempty"` // 0.25 to 4.0
+	Model       string                `yaml:"model,omitempty"` // tts-1, tts-1-hd
+	Voice       string                `yaml:"voice,omitempty"` // alloy, echo, fable, onyx, nova, shimmer
+	Speed       float64               `yaml:"speed,omitempty"` // 0.25 to 4.0
+	PerLanguage map[string]VoiceSetup `yaml:"per_language,omitempty"`
+}
+
+// VoiceSetup represents voice settings for a specific language
+type VoiceSetup struct {
+	Voice string  `yaml:"voice,omitempty"`
+	Speed float64 `yaml:"speed,omitempty"`
 }
 
 // CacheConfig represents cache configuration
@@ -78,6 +106,9 @@ func DefaultConfig() *Config {
 			Type:     "none",
 			Duration: 0.0,
 		},
+		Encoding:  DefaultEncodingConfig(),
+		Audio:     DefaultAudioConfig(),
+		Subtitles: DefaultSubtitlesConfig(),
 	}
 }
 
