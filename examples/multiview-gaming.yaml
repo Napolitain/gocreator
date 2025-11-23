@@ -1,0 +1,38 @@
+# Gaming Video with Facecam
+
+input:
+  lang: en
+  source: local
+
+output:
+  languages: [en]
+  directory: ./data/out
+
+multi_view:
+  enabled: true
+  
+  layouts:
+    - type: pip
+      slides: all
+      main: videos/gameplay.mp4
+      overlay: videos/facecam.mp4
+      position: bottom-right
+      size: 15%
+      offset: [15, 15]
+      border:
+        width: 3
+        color: "#00FF00"
+
+encoding:
+  video:
+    quality: ultra
+    fps: 60
+
+effects:
+  - type: text-overlay
+    slides: all
+    text: "GamerzTV"
+    position: top-right
+    font_size: 28
+    color: "#00FF00"
+    outline_width: 2

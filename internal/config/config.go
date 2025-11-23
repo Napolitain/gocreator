@@ -26,6 +26,7 @@ type Config struct {
 	Pip        PipConfig        `yaml:"pip,omitempty"`
 	Chapters   ChaptersConfig   `yaml:"chapters,omitempty"`
 	Metadata   MetadataConfig   `yaml:"metadata,omitempty"`
+	MultiView  MultiViewConfig  `yaml:"multi_view,omitempty"`
 }
 
 // InputConfig represents input configuration

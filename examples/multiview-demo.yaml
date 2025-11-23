@@ -1,0 +1,90 @@
+# Multi-View Demo Configuration
+# This example demonstrates various multi-view layouts
+
+input:
+  lang: en
+  source: local
+
+output:
+  languages: [en]
+  directory: ./data/out
+
+# Enable multi-view layouts
+multi_view:
+  enabled: true
+  
+  layouts:
+    # Slides 0-2: Split screen tutorial (60% screen recording, 40% instructor)
+    - type: split-horizontal
+      slides: 0-2
+      ratio: 60:40
+      videos:
+        left: videos/screen-recording.mp4
+        right: videos/instructor.mp4
+      gap: 4
+      
+    # Slide 3: Picture-in-picture with facecam
+    - type: pip
+      slides: 3
+      main: videos/main-content.mp4
+      overlay: videos/facecam.mp4
+      position: bottom-right
+      size: 20%
+      offset: [10, 10]
+      border:
+        width: 2
+        color: white
+        
+    # Slides 4-5: Team meeting grid (2x2)
+    - type: grid
+      slides: 4-5
+      rows: 2
+      cols: 2
+      grid_videos:
+        - videos/person1.mp4
+        - videos/person2.mp4
+        - videos/person3.mp4
+        - videos/person4.mp4
+      gap: 4
+      
+    # Slide 6: Zoom-style focus with gallery
+    - type: focus-gallery
+      slides: 6
+      focus: videos/main-speaker.mp4
+      gallery:
+        - videos/participant1.mp4
+        - videos/participant2.mp4
+        - videos/participant3.mp4
+      gallery_position: right
+      gallery_size: 20%
+      
+    # Slide 7: Vertical split (top/bottom)
+    - type: split-vertical
+      slides: 7
+      ratio: 50:50
+      videos:
+        top: videos/demo-part1.mp4
+        bottom: videos/demo-part2.mp4
+      gap: 2
+
+# Encoding settings
+encoding:
+  video:
+    quality: high
+    fps: 30
+
+# Background music
+audio:
+  background_music:
+    enabled: true
+    file: assets/music/background.mp3
+    volume: 0.15
+
+# Subtitles
+subtitles:
+  enabled: true
+  burn_in: true
+  style:
+    font_size: 24
+    color: white
+    outline_width: 2

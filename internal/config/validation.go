@@ -23,11 +23,6 @@ func (c *Config) Validate() error {
 		return err
 	}
 
-	// Validate transition
-	if err := c.Transition.Validate(); err != nil {
-		return err
-	}
-
 	// Add more validation as needed
 	return nil
 }

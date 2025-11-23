@@ -114,7 +114,7 @@ func (s *ExportService) exportToGIF(ctx context.Context, inputPath, outputPath s
 		fps = 15
 	}
 
-	width, height := parseResolution(format.Resolution)
+	width, _ := parseResolution(format.Resolution)
 	if width <= 0 {
 		width = 640
 	}

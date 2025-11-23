@@ -1,0 +1,35 @@
+# Tutorial Video with Multi-View
+# Screen recording + instructor webcam
+
+input:
+  lang: en
+  source: local
+
+output:
+  languages: [en, fr, es]
+  directory: ./data/out
+
+# Simple split screen for entire video
+multi_view:
+  enabled: true
+  
+  layouts:
+    - type: split-horizontal
+      slides: all
+      ratio: 65:35
+      videos:
+        left: videos/screen-recording.mp4
+        right: videos/instructor-webcam.mp4
+      gap: 0
+
+encoding:
+  video:
+    quality: high
+
+audio:
+  background_music:
+    enabled: false
+
+subtitles:
+  enabled: true
+  burn_in: true

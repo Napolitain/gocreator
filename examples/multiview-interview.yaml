@@ -1,0 +1,38 @@
+# Interview Video - Two People Side-by-Side
+
+input:
+  lang: en
+  source: local
+
+output:
+  languages: [en]
+  directory: ./data/out
+
+multi_view:
+  enabled: true
+  
+  layouts:
+    - type: split-horizontal
+      slides: all
+      ratio: 50:50
+      videos:
+        left: videos/interviewer.mp4
+        right: videos/interviewee.mp4
+      gap: 2
+
+encoding:
+  video:
+    quality: high
+    
+audio:
+  background_music:
+    enabled: true
+    file: assets/music/subtle-background.mp3
+    volume: 0.08
+    
+subtitles:
+  enabled: true
+  burn_in: true
+  style:
+    position: bottom
+    alignment: center
