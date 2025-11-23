@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"gocreator/internal/config"
 	"gocreator/internal/interfaces"
 
 	"github.com/spf13/afero"
@@ -18,7 +19,8 @@ type VideoCreatorConfig struct {
 	OutputLangs      []string
 	GoogleSlidesID   string // Google Slides presentation ID (found in the URL). When empty, uses local slides; when provided, fetches from Google Slides API
 	ProgressCallback interfaces.ProgressCallback
-	Transition       TransitionConfig // Transition configuration for slide transitions
+	Transition       TransitionConfig      // Transition configuration for slide transitions
+	MultiView        *config.MultiViewConfig // Multi-view configuration for split-screen layouts
 }
 
 // VideoCreator orchestrates the video creation process
@@ -63,7 +65,7 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 		progress = &interfaces.NoOpProgressCallback{}
 	}
 
-	// Configure video service with transitions if available
+	// Configure video service with transitions and multi-view if available
 	if videoService, ok := vc.videoService.(*VideoService); ok {
 		if err := cfg.Transition.Validate(); err == nil && cfg.Transition.IsEnabled() {
 			videoService.SetTransition(cfg.Transition)
@@ -74,6 +76,12 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 			} else if !cfg.Transition.IsEnabled() {
 				vc.logger.Debug("Transitions are disabled", "type", cfg.Transition.Type)
 			}
+		}
+
+		// Configure multi-view if enabled
+		if cfg.MultiView != nil && cfg.MultiView.Enabled {
+			videoService.SetMultiView(cfg.MultiView)
+			vc.logger.Info("Multi-view enabled", "layouts", len(cfg.MultiView.Layouts))
 		}
 	}
 

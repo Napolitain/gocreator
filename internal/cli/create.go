@@ -185,6 +185,7 @@ func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProg
 		GoogleSlidesID:   cfg.Input.PresentationID,
 		ProgressCallback: progressCallback,
 		Transition:       transition,
+		MultiView:        &cfg.MultiView,
 	}
 
 	// Run video creation

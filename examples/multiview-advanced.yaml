@@ -1,0 +1,294 @@
+# Advanced Multi-View Example
+# Showcases advanced features: mixed layouts, custom positions, dynamic switching
+
+input:
+  lang: en
+  source: local
+
+output:
+  languages: [en, es, fr]
+  directory: ./data/out
+  formats:
+    - type: mp4
+      resolution: 1920x1080
+      quality: high
+    - type: mp4
+      resolution: 1280x720
+      quality: medium
+
+# Advanced multi-view configuration
+multi_view:
+  enabled: true
+  
+  layouts:
+    # Slide 0: Intro with custom PiP (centered, larger overlay)
+    - type: pip
+      slides: 0
+      main: videos/intro-background.mp4
+      overlay: videos/host-intro.mp4
+      position: center
+      size: 50%
+      border:
+        width: 3
+        color: "#4ECDC4"
+      
+    # Slides 1-3: Tutorial section with 65:35 split
+    - type: split-horizontal
+      slides: 1-3
+      ratio: 65:35
+      videos:
+        left: videos/screen-demo.mp4
+        right: videos/instructor.mp4
+      gap: 8
+      
+    # Slide 4: Key point highlight with vertical split
+    - type: split-vertical
+      slides: 4
+      ratio: 40:60
+      videos:
+        top: videos/concept-animation.mp4
+        bottom: videos/code-example.mp4
+      gap: 6
+      
+    # Slides 5-6: Live coding with small PiP in corner
+    - type: pip
+      slides: 5-6
+      main: videos/fullscreen-code.mp4
+      overlay: videos/coder-facecam.mp4
+      position: top-right
+      size: 18%
+      offset: [20, 20]
+      border:
+        width: 2
+        color: "#FF6B6B"
+        
+    # Slide 7: Comparison - side by side with thin gap
+    - type: split-horizontal
+      slides: 7
+      ratio: 50:50
+      videos:
+        left: videos/before-optimization.mp4
+        right: videos/after-optimization.mp4
+      gap: 2
+      
+    # Slides 8-9: Team discussion with 2x3 grid
+    - type: grid
+      slides: 8-9
+      rows: 2
+      cols: 3
+      grid_videos:
+        - videos/team-lead.mp4
+        - videos/developer1.mp4
+        - videos/developer2.mp4
+        - videos/designer.mp4
+        - videos/pm.mp4
+        - videos/qa.mp4
+      gap: 6
+      
+    # Slide 10: Focus speaker with gallery (4 participants)
+    - type: focus-gallery
+      slides: 10
+      focus: videos/main-presenter.mp4
+      gallery:
+        - videos/participant1.mp4
+        - videos/participant2.mp4
+        - videos/participant3.mp4
+        - videos/participant4.mp4
+      gallery_position: right
+      gallery_size: 22%
+      
+    # Slides 11-12: Product demo with bottom-left PiP
+    - type: pip
+      slides: 11-12
+      main: videos/product-showcase.mp4
+      overlay: videos/demo-narrator.mp4
+      position: bottom-left
+      size: 25%
+      offset: [15, 15]
+      border:
+        width: 3
+        color: "#FFD93D"
+        
+    # Slide 13: Final comparison - vertical split
+    - type: split-vertical
+      slides: 13
+      ratio: 50:50
+      videos:
+        top: videos/results-before.mp4
+        bottom: videos/results-after.mp4
+      gap: 4
+      
+    # Slide 14: Outro with gallery on left
+    - type: focus-gallery
+      slides: 14
+      focus: videos/outro-thanks.mp4
+      gallery:
+        - videos/contributor1.mp4
+        - videos/contributor2.mp4
+        - videos/contributor3.mp4
+      gallery_position: left
+      gallery_size: 20%
+
+# Encoding with high quality
+encoding:
+  video:
+    codec: libx264
+    quality: high
+    preset: medium
+    crf: 21
+    fps: 30
+  audio:
+    codec: aac
+    bitrate: 192k
+
+# Advanced effects
+effects:
+  # Ken Burns zoom on intro
+  - type: ken-burns
+    slides: [0]
+    zoom: 1.2
+    duration: 3.0
+    
+  # Color grading for professional look
+  - type: color-grade
+    slides: all
+    saturation: 1.1
+    contrast: 1.05
+    brightness: 1.02
+    
+  # Vignette on key slides
+  - type: vignette
+    slides: [4, 7, 13]
+    intensity: 0.3
+    
+  # Text overlay for slide titles
+  - type: text-overlay
+    slides: 1
+    text: "Step 1: Setup"
+    position: top-left
+    font_size: 32
+    color: white
+    outline_width: 2
+    offset: [40, 40]
+    
+  - type: text-overlay
+    slides: 2
+    text: "Step 2: Configuration"
+    position: top-left
+    font_size: 32
+    color: white
+    outline_width: 2
+    offset: [40, 40]
+    
+  - type: text-overlay
+    slides: 3
+    text: "Step 3: Implementation"
+    position: top-left
+    font_size: 32
+    color: white
+    outline_width: 2
+    offset: [40, 40]
+
+# Background music with fade
+audio:
+  background_music:
+    enabled: true
+    file: assets/music/upbeat-corporate.mp3
+    volume: 0.12
+    fade_in: 2.0
+    fade_out: 3.0
+  
+  narration:
+    enabled: true
+    volume: 1.0
+
+# Animated subtitles
+subtitles:
+  enabled: true
+  burn_in: true
+  style:
+    font: "Montserrat"
+    font_size: 28
+    color: white
+    outline_width: 3
+    outline_color: black
+    position: bottom
+    alignment: center
+    margin_vertical: 60
+  animation:
+    type: fade
+    duration: 0.3
+
+# Smooth transitions between slides
+transition:
+  type: fade
+  duration: 0.8
+
+# Custom timing per slide
+timing:
+  - slide: 0
+    duration: 5.0  # Longer intro
+  - slide: 14
+    duration: 6.0  # Longer outro
+  default_duration: 4.0
+
+# Chapters for easy navigation
+chapters:
+  enabled: true
+  chapters:
+    - time: 0
+      title: "Introduction"
+    - time: 5
+      title: "Tutorial: Getting Started"
+    - time: 17
+      title: "Key Concepts"
+    - time: 21
+      title: "Live Coding Demo"
+    - time: 29
+      title: "Before & After Comparison"
+    - time: 33
+      title: "Team Discussion"
+    - time: 41
+      title: "Q&A Session"
+    - time: 45
+      title: "Product Demo"
+    - time: 53
+      title: "Results"
+    - time: 57
+      title: "Conclusion"
+
+# Video metadata
+metadata:
+  title: "Advanced GoCreator Tutorial - Multi-View Mastery"
+  description: |
+    Complete guide to creating professional multi-view videos with GoCreator.
+    Learn split-screen, picture-in-picture, grid layouts, and advanced techniques.
+  
+  tags:
+    - tutorial
+    - multi-view
+    - split-screen
+    - video-editing
+    - gocreator
+  
+  author: "GoCreator Team"
+  category: "Education"
+  
+  thumbnail: ./assets/thumbnails/advanced-tutorial.jpg
+
+# Intro/Outro
+intro:
+  enabled: true
+  video: ./assets/intro.mp4
+  duration: 3.0
+
+outro:
+  enabled: true
+  video: ./assets/outro.mp4
+  duration: 4.0
+  
+# Cache for faster iterations
+cache:
+  enabled: true
+  directory: ./cache
+  ttl: 168h  # 7 days

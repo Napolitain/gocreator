@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"gocreator/internal/config"
 	"gocreator/internal/interfaces"
 
 	"github.com/spf13/afero"
@@ -20,23 +21,31 @@ import (
 
 // VideoService handles video generation
 type VideoService struct {
-	fs         afero.Fs
-	logger     interfaces.Logger
-	transition TransitionConfig
+	fs               afero.Fs
+	logger           interfaces.Logger
+	transition       TransitionConfig
+	multiViewService *MultiViewService
+	multiViewConfig  *config.MultiViewConfig
 }
 
 // NewVideoService creates a new video service
 func NewVideoService(fs afero.Fs, logger interfaces.Logger) *VideoService {
 	return &VideoService{
-		fs:         fs,
-		logger:     logger,
-		transition: TransitionConfig{Type: TransitionNone}, // Default: no transitions
+		fs:               fs,
+		logger:           logger,
+		transition:       TransitionConfig{Type: TransitionNone}, // Default: no transitions
+		multiViewService: NewMultiViewService(fs, logger),
 	}
 }
 
 // SetTransition sets the transition configuration
 func (s *VideoService) SetTransition(transition TransitionConfig) {
 	s.transition = transition
+}
+
+// SetMultiView sets the multi-view configuration
+func (s *VideoService) SetMultiView(multiViewConfig *config.MultiViewConfig) {
+	s.multiViewConfig = multiViewConfig
 }
 
 // GenerateFromSlides generates videos from slides and audio
@@ -101,6 +110,11 @@ func (s *VideoService) GenerateFromSlides(ctx context.Context, slides, audioPath
 		if err != nil {
 			return err
 		}
+	}
+
+	// Apply multi-view layouts if configured
+	if err := s.applyMultiViewLayouts(ctx, videoFiles, tempDir, width, height); err != nil {
+		return fmt.Errorf("failed to apply multi-view layouts: %w", err)
 	}
 
 	// Concatenate videos
@@ -602,4 +616,67 @@ func (s *VideoService) saveFinalVideoHash(videoFiles []string, outputPath string
 	
 	hashPath := outputPath + ".hash"
 	return afero.WriteFile(s.fs, hashPath, []byte(hash), 0644)
+}
+
+// applyMultiViewLayouts applies multi-view layouts to video segments
+func (s *VideoService) applyMultiViewLayouts(ctx context.Context, videoFiles []string, tempDir string, width, height int) error {
+	if s.multiViewConfig == nil || !s.multiViewConfig.Enabled {
+		return nil
+	}
+
+	s.logger.Info("Applying multi-view layouts", "layouts", len(s.multiViewConfig.Layouts))
+
+	// Build a map of which slides have multi-view layouts
+	multiViewMap := make(map[int]config.LayoutConfig)
+	for _, layout := range s.multiViewConfig.Layouts {
+		slideIndices := layout.ParseSlides(len(videoFiles))
+		for _, idx := range slideIndices {
+			multiViewMap[idx] = layout
+			s.logger.Debug("Multi-view layout for slide", "slide", idx, "type", layout.Type)
+		}
+	}
+
+	// Apply layouts
+	var wg sync.WaitGroup
+	errors := make([]error, len(videoFiles))
+
+	for idx, layout := range multiViewMap {
+		wg.Add(1)
+		go func(slideIdx int, layoutCfg config.LayoutConfig) {
+			defer wg.Done()
+
+			// Generate multi-view video
+			multiViewPath := filepath.Join(tempDir, fmt.Sprintf("multiview_%d.mp4", slideIdx))
+
+			if err := s.multiViewService.GenerateMultiViewVideo(
+				ctx,
+				layoutCfg,
+				multiViewPath,
+				width,
+				height,
+			); err != nil {
+				errors[slideIdx] = fmt.Errorf("failed to generate multi-view for slide %d: %w", slideIdx, err)
+				return
+			}
+
+			// Replace the original video with the multi-view version
+			videoFiles[slideIdx] = multiViewPath
+			s.logger.Info("Multi-view applied", "slide", slideIdx, "type", layoutCfg.Type)
+		}(idx, layout)
+	}
+
+	wg.Wait()
+
+	// Check for errors
+	for _, err := range errors {
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(multiViewMap) > 0 {
+		s.logger.Info("Multi-view layouts applied successfully", "count", len(multiViewMap))
+	}
+
+	return nil
 }
