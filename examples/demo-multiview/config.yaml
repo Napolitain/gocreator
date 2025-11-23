@@ -1,0 +1,75 @@
+# Multi-View Demo Configuration
+# Complete working example with all assets included
+
+input:
+  lang: en
+  source: local
+
+output:
+  languages: [en]
+  directory: ./data/out
+  formats:
+    - type: mp4
+      resolution: 1920x1080
+      quality: high
+
+# Multi-view demonstration
+multi_view:
+  enabled: true
+  
+  layouts:
+    # Slide 0: No multi-view (normal slide)
+    # Shows the intro slide without modification
+    
+    # Slide 1: Horizontal split screen (screen + webcam)
+    - type: split-horizontal
+      slides: 1
+      ratio: 65:35
+      videos:
+        left: data/videos/screen.mp4
+        right: data/videos/webcam.mp4
+      gap: 4
+    
+    # Slide 2: Picture-in-Picture (main + overlay)
+    - type: pip
+      slides: 2
+      main: data/videos/main.mp4
+      overlay: data/videos/overlay.mp4
+      position: bottom-right
+      size: 25%
+      border:
+        width: 3
+        color: "#00FF00"
+    
+    # Slide 3: Grid layout (2x2 team meeting)
+    - type: grid
+      slides: 3
+      rows: 2
+      cols: 2
+      grid_videos:
+        - data/videos/person1.mp4
+        - data/videos/person2.mp4
+        - data/videos/person3.mp4
+        - data/videos/person4.mp4
+      gap: 6
+
+# Simple encoding settings
+encoding:
+  video:
+    codec: libx264
+    preset: fast
+    crf: 23
+    fps: 30
+  audio:
+    codec: aac
+    bitrate: 128k
+
+# No transitions for simplicity
+transition:
+  type: none
+
+# Cache for faster re-runs
+cache:
+  enabled: true
+  directory: ./cache
+  ttl: 24h
