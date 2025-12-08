@@ -10,7 +10,7 @@ require (
 	github.com/openai/openai-go/v3 v3.8.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/spf13/afero v1.15.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/oauth2 v0.32.0
 	google.golang.org/api v0.255.0
