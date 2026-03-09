@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"gocreator/internal/config"
+
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +20,7 @@ func TestNewVideoService(t *testing.T) {
 	assert.NotNil(t, service)
 	assert.Equal(t, fs, service.fs)
 	assert.Equal(t, logger, service.logger)
+	assert.Equal(t, config.MediaAlignmentVideo, service.mediaAlignment)
 }
 
 // Note: isVideoFile, getMediaDimensions, concatenateVideos, and generateSingleVideo
@@ -68,6 +71,25 @@ func TestVideoServiceBuildSingleVideoArgs(t *testing.T) {
 		assert.Contains(t, args, "1:a:0")
 	})
 
+	t.Run("slide alignment loops or trims video to narration duration", func(t *testing.T) {
+		args := service.buildSingleVideoArgs(videoRenderInput{
+			slidePath:     "clip.mp4",
+			audioPath:     "voice.mp3",
+			outputPath:    "out.mp4",
+			targetWidth:   1280,
+			targetHeight:  720,
+			inputWidth:    1280,
+			inputHeight:   720,
+			videoDuration: 12.5,
+			audioDuration: 18,
+			isVideo:       true,
+			alignToSlide:  true,
+		})
+
+		assert.Equal(t, []string{"-y", "-stream_loop", "-1", "-i", "clip.mp4", "-i", "voice.mp3"}, args[:7])
+		assert.Contains(t, strings.Join(args, " "), "-t 18.00")
+	})
+
 	t.Run("image slides keep still-image rendering flags", func(t *testing.T) {
 		args := service.buildSingleVideoArgs(videoRenderInput{
 			slidePath:    "slide.png",
@@ -84,4 +106,17 @@ func TestVideoServiceBuildSingleVideoArgs(t *testing.T) {
 		assert.Contains(t, strings.Join(args, " "), "scale=1920:1080:force_original_aspect_ratio=decrease")
 		assert.Contains(t, args, "-shortest")
 	})
+}
+
+func TestVideoServiceSetMediaAlignment(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	logger := &mockLogger{}
+	service := NewVideoService(fs, logger)
+
+	require.NoError(t, service.SetMediaAlignment(config.MediaAlignmentSlide))
+	assert.Equal(t, config.MediaAlignmentSlide, service.mediaAlignment)
+
+	err := service.SetMediaAlignment("invalid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported media alignment")
 }

@@ -115,6 +115,7 @@ effects:
   #   intensity: 0.3
 
 # Audio settings
+# Narration itself is inferred from slide sidecar .txt/.<lang>.txt/.wav/.mp3 files.
 audio:
   # Background music
   background_music:
@@ -181,16 +182,18 @@ subtitles:
 #   transition_duration: 0.7
 
 # Timing controls (optional)
-# timing:
-#   per_slide:
-#     - slide: 2
-#       speed: 1.5       # 1.5x faster (timelapse effect)
-#     - slide: 4
-#       speed: 0.5       # 0.5x slower (slow motion)
-#   
-#   default_image_duration: auto
-#   min_slide_duration: 2.0
-#   max_slide_duration: 30.0
+timing:
+  media_alignment: video  # video = keep clip duration, slide = match narration duration
+
+  # per_slide:
+  #   - slide: 2
+  #     speed: 1.5       # 1.5x faster (timelapse effect)
+  #   - slide: 4
+  #     speed: 0.5       # 0.5x slower (slow motion)
+  #
+  # default_image_duration: auto
+  # min_slide_duration: 2.0
+  # max_slide_duration: 30.0
 
 # Chapter markers (for YouTube, etc.)
 # chapters:

@@ -1,0 +1,18 @@
+# Mixed example:
+# - slide 1 uses text sidecars (TTS)
+# - slide 2 uses prerecorded audio sidecars
+# Requires OPENAI_API_KEY for slide 1 narration.
+
+input:
+  lang: en
+
+output:
+  languages:
+    - en
+    - fr
+
+transition:
+  type: none
+
+timing:
+  media_alignment: video

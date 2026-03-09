@@ -24,6 +24,7 @@ type VideoService struct {
 	fs               afero.Fs
 	logger           interfaces.Logger
 	transition       TransitionConfig
+	mediaAlignment   string
 	multiViewService *MultiViewService
 	multiViewConfig  *config.MultiViewConfig
 }
@@ -34,6 +35,7 @@ func NewVideoService(fs afero.Fs, logger interfaces.Logger) *VideoService {
 		fs:               fs,
 		logger:           logger,
 		transition:       TransitionConfig{Type: TransitionNone}, // Default: no transitions
+		mediaAlignment:   config.MediaAlignmentVideo,
 		multiViewService: NewMultiViewService(fs, logger),
 	}
 }
@@ -41,6 +43,17 @@ func NewVideoService(fs afero.Fs, logger interfaces.Logger) *VideoService {
 // SetTransition sets the transition configuration
 func (s *VideoService) SetTransition(transition TransitionConfig) {
 	s.transition = transition
+}
+
+// SetMediaAlignment sets how video slides are aligned against narration.
+func (s *VideoService) SetMediaAlignment(alignment string) error {
+	normalized, err := normalizeMediaAlignment(alignment)
+	if err != nil {
+		return err
+	}
+
+	s.mediaAlignment = normalized
+	return nil
 }
 
 // SetMultiView sets the multi-view configuration
@@ -128,7 +141,7 @@ func (s *VideoService) GenerateFromSlides(ctx context.Context, slides, audioPath
 
 func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath string, targetWidth, targetHeight int) error {
 	// Check segment cache first
-	cached, err := s.checkSegmentCache(slidePath, audioPath, outputPath, targetWidth, targetHeight)
+	cached, err := s.checkSegmentCache(slidePath, audioPath, outputPath, targetWidth, targetHeight, s.mediaAlignment)
 	if err != nil {
 		s.logger.Warn("Failed to check segment cache", "error", err)
 	}
@@ -161,8 +174,10 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 
 		audioDuration, err := s.getVideoDuration(audioPath)
 		if err != nil {
-			s.logger.Warn("Failed to get audio duration, proceeding anyway", "path", audioPath, "error", err)
-		} else if audioDuration < videoDuration*0.8 {
+			return fmt.Errorf("failed to get audio duration: %w", err)
+		}
+
+		if audioDuration < videoDuration*0.8 && s.mediaAlignment != config.MediaAlignmentSlide {
 			s.logger.Warn("Audio is significantly shorter than video, remainder will follow clip audio or stay silent",
 				"video_duration", videoDuration,
 				"audio_duration", audioDuration,
@@ -183,8 +198,10 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 			inputWidth:       iw,
 			inputHeight:      ih,
 			videoDuration:    videoDuration,
+			audioDuration:    audioDuration,
 			isVideo:          true,
 			hasEmbeddedAudio: hasEmbeddedAudio,
+			alignToSlide:     s.mediaAlignment == config.MediaAlignmentSlide,
 		})
 	} else {
 		s.logger.Debug("Processing image input", "path", slidePath)
@@ -211,7 +228,7 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 	}
 
 	// Save segment hash for future cache hits
-	if err := s.saveSegmentHash(slidePath, audioPath, outputPath, targetWidth, targetHeight); err != nil {
+	if err := s.saveSegmentHash(slidePath, audioPath, outputPath, targetWidth, targetHeight, s.mediaAlignment); err != nil {
 		s.logger.Warn("Failed to save segment hash", "error", err)
 		// Don't fail the operation if hash saving fails
 	}
@@ -228,14 +245,19 @@ type videoRenderInput struct {
 	inputWidth       int
 	inputHeight      int
 	videoDuration    float64
+	audioDuration    float64
 	isVideo          bool
 	hasEmbeddedAudio bool
+	alignToSlide     bool
 }
 
 func (s *VideoService) buildSingleVideoArgs(input videoRenderInput) []string {
 	args := []string{"-y"}
 
 	if input.isVideo {
+		if input.alignToSlide {
+			args = append(args, "-stream_loop", "-1")
+		}
 		args = append(args, "-i", input.slidePath, "-i", input.audioPath)
 
 		videoMap := "0:v:0"
@@ -250,12 +272,21 @@ func (s *VideoService) buildSingleVideoArgs(input videoRenderInput) []string {
 		}
 
 		if input.hasEmbeddedAudio {
-			filters = append(filters, "[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[a]")
+			durationMode := "first"
+			if input.alignToSlide {
+				durationMode = "shortest"
+			}
+			filters = append(filters, fmt.Sprintf("[0:a:0][1:a:0]amix=inputs=2:duration=%s:dropout_transition=0[a]", durationMode))
 			audioMap = "[a]"
 		}
 
 		if len(filters) > 0 {
 			args = append(args, "-filter_complex", strings.Join(filters, ";"))
+		}
+
+		targetDuration := input.videoDuration
+		if input.alignToSlide {
+			targetDuration = input.audioDuration
 		}
 
 		args = append(args,
@@ -264,7 +295,7 @@ func (s *VideoService) buildSingleVideoArgs(input videoRenderInput) []string {
 			"-c:v", "libx264",
 			"-c:a", "mp3", "-b:a", "192k",
 			"-pix_fmt", "yuv420p",
-			"-t", fmt.Sprintf("%.2f", input.videoDuration),
+			"-t", fmt.Sprintf("%.2f", targetDuration),
 			input.outputPath,
 		)
 
@@ -538,7 +569,7 @@ func (s *VideoService) getVideoDuration(videoPath string) (float64, error) {
 }
 
 // computeSegmentHash computes a cache key for a video segment
-func (s *VideoService) computeSegmentHash(slidePath, audioPath string, width, height int) (string, error) {
+func (s *VideoService) computeSegmentHash(slidePath, audioPath string, width, height int, mediaAlignment string) (string, error) {
 	// Read slide file
 	slideData, err := afero.ReadFile(s.fs, slidePath)
 	if err != nil {
@@ -558,12 +589,15 @@ func (s *VideoService) computeSegmentHash(slidePath, audioPath string, width, he
 	if _, err := fmt.Fprintf(hasher, "%dx%d", width, height); err != nil {
 		return "", fmt.Errorf("failed to write dimensions to hash: %w", err)
 	}
+	if _, err := hasher.Write([]byte(mediaAlignment)); err != nil {
+		return "", fmt.Errorf("failed to write media alignment to hash: %w", err)
+	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 // checkSegmentCache checks if a cached video segment exists and is valid
-func (s *VideoService) checkSegmentCache(slidePath, audioPath, outputPath string, width, height int) (bool, error) {
+func (s *VideoService) checkSegmentCache(slidePath, audioPath, outputPath string, width, height int, mediaAlignment string) (bool, error) {
 	// Check if output file exists
 	exists, err := afero.Exists(s.fs, outputPath)
 	if err != nil {
@@ -590,7 +624,7 @@ func (s *VideoService) checkSegmentCache(slidePath, audioPath, outputPath string
 	}
 
 	// Compute current hash
-	currentHash, err := s.computeSegmentHash(slidePath, audioPath, width, height)
+	currentHash, err := s.computeSegmentHash(slidePath, audioPath, width, height, mediaAlignment)
 	if err != nil {
 		return false, err
 	}
@@ -599,14 +633,25 @@ func (s *VideoService) checkSegmentCache(slidePath, audioPath, outputPath string
 }
 
 // saveSegmentHash saves the hash for a video segment
-func (s *VideoService) saveSegmentHash(slidePath, audioPath, outputPath string, width, height int) error {
-	hash, err := s.computeSegmentHash(slidePath, audioPath, width, height)
+func (s *VideoService) saveSegmentHash(slidePath, audioPath, outputPath string, width, height int, mediaAlignment string) error {
+	hash, err := s.computeSegmentHash(slidePath, audioPath, width, height, mediaAlignment)
 	if err != nil {
 		return err
 	}
 
 	hashPath := outputPath + ".hash"
 	return afero.WriteFile(s.fs, hashPath, []byte(hash), 0644)
+}
+
+func normalizeMediaAlignment(alignment string) (string, error) {
+	switch strings.TrimSpace(strings.ToLower(alignment)) {
+	case "", config.MediaAlignmentVideo:
+		return config.MediaAlignmentVideo, nil
+	case config.MediaAlignmentSlide:
+		return config.MediaAlignmentSlide, nil
+	default:
+		return "", fmt.Errorf("unsupported media alignment %q (expected %q or %q)", alignment, config.MediaAlignmentVideo, config.MediaAlignmentSlide)
+	}
 }
 
 // computeFinalVideoHash computes a cache key for the final concatenated video

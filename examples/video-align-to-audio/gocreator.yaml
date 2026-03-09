@@ -1,0 +1,15 @@
+# Minimal example: a video slide aligned to narration duration.
+# No OPENAI_API_KEY is required because 01-lesson.wav is used directly.
+
+input:
+  lang: en
+
+output:
+  languages:
+    - en
+
+transition:
+  type: none
+
+timing:
+  media_alignment: slide

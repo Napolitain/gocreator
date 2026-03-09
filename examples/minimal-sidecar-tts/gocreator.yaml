@@ -1,0 +1,15 @@
+# Minimal example: one image slide plus one text sidecar.
+# Requires OPENAI_API_KEY because narration is generated from 01-cover.txt.
+
+input:
+  lang: en
+
+output:
+  languages:
+    - en
+
+transition:
+  type: none
+
+timing:
+  media_alignment: video

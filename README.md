@@ -8,12 +8,12 @@ GoCreator turns local slides plus narration text into narrated videos from the c
 
 ## What it does
 
-- Reads narration from `data/texts.txt`
 - Reads slide assets from `data/slides`
+- Infers narration from matching `.txt` and audio sidecar files in `data/slides`
 - Supports PNG, JPG, JPEG, PDF, MP4, MOV, AVI, MKV, and WEBM inputs
 - Expands PDFs into one page per slide before rendering
 - Translates narration into multiple output languages
-- Generates text-to-speech audio
+- Generates text-to-speech audio or uses prerecorded narration
 - Renders per-slide video segments and combines them into final outputs
 - Caches translations, audio, video segments, and PDF preprocessing artifacts
 
@@ -30,14 +30,15 @@ The current media contract is:
 
 - One narration entry is required for every final slide after PDF expansion
 - Image slides and PDF pages use narration duration
-- Video slides use clip duration
-- Video slides mix embedded clip audio with generated narration
+- Video slides use clip duration by default
+- Video slides can instead align to narration duration with `timing.media_alignment: slide`
+- Video slides mix embedded clip audio with narration when the clip has audio
 
 ## Requirements
 
 - Go 1.24+ if building from source
 - `ffmpeg` and `ffprobe` in `PATH`
-- `OPENAI_API_KEY` set in the environment
+- `OPENAI_API_KEY` set in the environment when TTS or translation is needed
 - For PDF input: `pdfinfo`, `pdfseparate`, and `pdftocairo` in `PATH`
 
 PDF support currently relies on those PDF utilities during preprocessing so multi-page PDFs can be split and rendered into slide assets.
@@ -68,23 +69,25 @@ This creates:
 
 - `gocreator.yaml`
 - `data/slides/`
-- `data/texts.txt`
 - `data/out/`
 - `data/cache/`
 
 Add your assets:
 
 - Put images, PDFs, and/or video clips in `data/slides/`
-- Edit `data/texts.txt`
+- Put matching narration files in the same folder using the same basename
 
-Narration entries are separated with a single `-` line:
+Examples:
 
 ```text
-Welcome to GoCreator
--
-This is the second slide
--
-This is the third slide
+data/slides/01-cover.png
+data/slides/01-cover.txt
+
+data/slides/02-demo.mp4
+data/slides/02-demo.wav
+
+data/slides/03-summary.png
+data/slides/03-summary.fr.txt
 ```
 
 Create videos:
@@ -92,6 +95,34 @@ Create videos:
 ```bash
 gocreator create --lang en --langs-out en,fr,es
 ```
+
+## Narration sidecars
+
+GoCreator now infers narration from files placed next to each slide:
+
+- `basename.txt`: source-language text for TTS or translation
+- `basename.<lang>.txt`: language-specific text override
+- `basename.mp3` / `basename.wav` / other supported audio formats: source-language prerecorded audio
+- `basename.<lang>.mp3` / `basename.<lang>.wav`: language-specific prerecorded audio
+
+Inference rules:
+
+- If matching audio exists for the requested language, GoCreator uses it directly
+- Otherwise, if matching text exists for the requested language, GoCreator uses TTS on that text
+- Otherwise, if source text exists, GoCreator translates it and uses TTS
+- If both text and audio exist for the same slide/language, audio wins
+- Sidecars can be interleaved in any order; media ordering is driven only by slide filenames
+
+For PDF pages, use the expanded page basename:
+
+- `02-handout-page-0001.txt`
+- `02-handout-page-0002.fr.txt`
+- `02-handout-p003.wav`
+
+`timing.media_alignment` still controls video-slide timing:
+
+- `video`: keep the clip duration
+- `slide`: trim or loop the clip to narration duration
 
 ## PDF behavior
 
@@ -109,13 +140,13 @@ If `data/slides` contains:
 03-demo.mp4
 ```
 
-then `data/texts.txt` must contain 5 narration entries:
+then your narration sidecars could look like:
 
-1. `01-cover.png`
-2. `02-handout.pdf` page 1
-3. `02-handout.pdf` page 2
-4. `02-handout.pdf` page 3
-5. `03-demo.mp4`
+1. `01-cover.txt`
+2. `02-handout-page-0001.txt`
+3. `02-handout-page-0002.txt`
+4. `02-handout-page-0003.txt`
+5. `03-demo.wav`
 
 ## Commands
 
@@ -136,11 +167,11 @@ Common flags:
 
 ## How `create` works
 
-1. Load narration from `data/texts.txt`
-2. Load slides from `data/slides`
-3. Expand and cache PDF pages when needed
-4. Translate narration for non-source languages
-5. Generate narration audio
+1. Load slides from `data/slides`
+2. Expand and cache PDF pages when needed
+3. Match per-slide text and audio sidecars from `data/slides`
+4. Translate only the slide texts that do not already have a target-language sidecar
+5. Generate TTS only for slides that do not already have a matching audio sidecar
 6. Render one video segment per final slide
 7. Concatenate segments into `data/out/output-<lang>.mp4`
 
@@ -154,13 +185,18 @@ The main `create` flow actively uses:
 - `output.languages`
 - `cache`
 - `transition`
+- `timing.media_alignment`
 - `multi_view`
 
 Other config sections remain in the schema, but they are not yet part of the core `create` pipeline.
 
 ## Examples
 
-- `examples/getting-started/` - minimal local workflow
+- `examples/minimal-sidecar-tts/` - single image plus `.txt` sidecar (requires API key)
+- `examples/video-prerecorded/` - single video plus prerecorded `.wav` sidecar (no API key)
+- `examples/video-align-to-audio/` - video plus longer prerecorded audio using `timing.media_alignment: slide`
+- `examples/language-overrides/` - mixed per-language `.txt` and prerecorded audio sidecars
+- `examples/getting-started/` - older minimal local workflow
 - `examples/demo/` - end-to-end CLI example
 - `examples/demo-multiview/` - multi-view example
 - `examples/*.yaml` - config schema examples

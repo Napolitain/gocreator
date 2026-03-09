@@ -2,17 +2,54 @@ package services
 
 import (
 	"context"
-	"path/filepath"
+	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"testing"
 
 	"gocreator/internal/mocks"
 
+	"github.com/openai/openai-go/v3"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+type translationCacheClient struct {
+	mu        sync.Mutex
+	responses map[string]string
+	callCount int
+}
+
+func (c *translationCacheClient) ChatCompletion(ctx context.Context, messages []openai.ChatCompletionMessageParamUnion) (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var payload string
+	for _, message := range messages {
+		if message.OfUser != nil && message.OfUser.Content.OfString.Valid() {
+			payload = message.OfUser.Content.OfString.Value
+			break
+		}
+	}
+	if payload == "" {
+		payload = fmt.Sprintf("%v", messages)
+	}
+	for needle, translated := range c.responses {
+		if strings.Contains(payload, needle) {
+			c.callCount++
+			return translated, nil
+		}
+	}
+
+	return "", fmt.Errorf("unexpected translation payload: %s", payload)
+}
+
+func (c *translationCacheClient) GenerateSpeech(ctx context.Context, text string) (io.ReadCloser, error) {
+	return nil, fmt.Errorf("GenerateSpeech should not be called in translation cache tests")
+}
 
 // cacheTestReadCloser implements io.ReadCloser for testing
 type cacheTestReadCloser struct {
@@ -27,203 +64,60 @@ func newCacheTestReadCloser(data string) *cacheTestReadCloser {
 	return &cacheTestReadCloser{Reader: strings.NewReader(data)}
 }
 
-// TestTranslationCacheHits verifies that translation API calls are properly cached
+// TestTranslationCacheHits verifies that translation API calls are properly cached.
 func TestTranslationCacheHits(t *testing.T) {
-	t.Run("no cache hit on first run", func(t *testing.T) {
+	t.Run("disk cache hit on second run", func(t *testing.T) {
 		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
+		client := &translationCacheClient{responses: map[string]string{
+			"Hello": "Hola",
+			"World": "Mundo",
+		}}
 		logger := &mockLogger{}
+		cacheDir := testPath("cache", "translations")
 
-		// Create test data directory structure
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		translationTextPath := testPath("test", "data", "cache", "es", "text", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "es", "audio")
-		outputPath := testPath("test", "data", "out", "output-es.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld"), 0644))
+		service1 := NewTranslationServiceWithCache(client, logger, fs, cacheDir)
+		service2 := NewTranslationServiceWithCache(client, logger, fs, cacheDir)
 
-		// Setup expectations
-		inputTexts := []string{"Hello", "World"}
-		translatedTexts := []string{"Hola", "Mundo"}
-		slides := []string{testPath("test", "data", "slides", "1.png"), testPath("test", "data", "slides", "2.png")}
-		audioPaths := []string{testPath("test", "data", "cache", "es", "audio", "0.mp3"), testPath("test", "data", "cache", "es", "audio", "1.mp3")}
+		texts := []string{"Hello", "World"}
+		ctx := context.Background()
 
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil).Once()
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil).Once()
+		firstRun, err := service1.TranslateBatch(ctx, texts, "es")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Hola", "Mundo"}, firstRun)
 
-		// Translation should be called once (no cache on first run)
-		mockTranslation.On("TranslateBatch", mock.Anything, inputTexts, "es").
-			Return(translatedTexts, nil).Once()
+		secondRun, err := service2.TranslateBatch(ctx, texts, "es")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Hola", "Mundo"}, secondRun)
 
-		mockText.On("Save", mock.Anything, translationTextPath, translatedTexts).
-			Return(nil).Once()
-		mockAudio.On("GenerateBatch", mock.Anything, translatedTexts, audioDir).
-			Return(audioPaths, nil).Once()
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).
-			Return(nil).Once()
-
-		// Create service
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
-
-		// Execute first run
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"es"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		// Assert
-		assert.NoError(t, err)
-		mockTranslation.AssertExpectations(t)
-		// Verify TranslateBatch was called exactly once
-		mockTranslation.AssertNumberOfCalls(t, "TranslateBatch", 1)
+		assert.Equal(t, 2, client.callCount)
 	})
 
-	t.Run("cache hit on second run", func(t *testing.T) {
+	t.Run("partial cache hit only translates changed text", func(t *testing.T) {
 		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
+		client := &translationCacheClient{responses: map[string]string{
+			"Hello":    "Hola",
+			"World":    "Mundo",
+			"Universe": "Universo",
+		}}
 		logger := &mockLogger{}
+		cacheDir := testPath("cache", "translations")
 
-		// Create test data directory structure with cached translation
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		translationTextPath := testPath("test", "data", "cache", "es", "text", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "es", "audio")
-		outputPath := testPath("test", "data", "out", "output-es.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, fs.MkdirAll(filepath.Dir(translationTextPath), 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld"), 0644))
-		require.NoError(t, afero.WriteFile(fs, translationTextPath, []byte("Hola\n-\nMundo"), 0644))
+		service1 := NewTranslationServiceWithCache(client, logger, fs, cacheDir)
+		service2 := NewTranslationServiceWithCache(client, logger, fs, cacheDir)
 
-		// Setup expectations
-		inputTexts := []string{"Hello", "World"}
-		cachedTexts := []string{"Hola", "Mundo"}
-		slides := []string{testPath("test", "data", "slides", "1.png"), testPath("test", "data", "slides", "2.png")}
-		audioPaths := []string{testPath("test", "data", "cache", "es", "audio", "0.mp3"), testPath("test", "data", "cache", "es", "audio", "1.mp3")}
+		ctx := context.Background()
+		_, err := service1.TranslateBatch(ctx, []string{"Hello", "World"}, "es")
+		require.NoError(t, err)
 
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil).Once()
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil).Once()
+		translated, err := service2.TranslateBatch(ctx, []string{"Hello", "Universe"}, "es")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"Hola", "Universo"}, translated)
 
-		// Translation should load from cache instead of translating
-		mockText.On("Load", mock.Anything, translationTextPath).
-			Return(cachedTexts, nil).Once()
-
-		mockAudio.On("GenerateBatch", mock.Anything, cachedTexts, audioDir).
-			Return(audioPaths, nil).Once()
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).
-			Return(nil).Once()
-
-		// Create service
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
-
-		// Execute second run with cache
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"es"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		// Assert
-		assert.NoError(t, err)
-		// Translation API should NOT be called (cache hit)
-		mockTranslation.AssertNotCalled(t, "TranslateBatch")
-	})
-
-	t.Run("multiple languages with mixed cache hits", func(t *testing.T) {
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
-
-		// Create test data directory structure
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		esTextPath := testPath("test", "data", "cache", "es", "text", "texts.txt")
-		esAudioDir := testPath("test", "data", "cache", "es", "audio")
-		esOutputPath := testPath("test", "data", "out", "output-es.mp4")
-		frTextPath := testPath("test", "data", "cache", "fr", "text", "texts.txt")
-		frAudioDir := testPath("test", "data", "cache", "fr", "audio")
-		frOutputPath := testPath("test", "data", "out", "output-fr.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, fs.MkdirAll(filepath.Dir(esTextPath), 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld"), 0644))
-		// Spanish translation is cached
-		require.NoError(t, afero.WriteFile(fs, esTextPath, []byte("Hola\n-\nMundo"), 0644))
-
-		// Setup expectations
-		inputTexts := []string{"Hello", "World"}
-		cachedSpanishTexts := []string{"Hola", "Mundo"}
-		frenchTexts := []string{"Bonjour", "Monde"}
-		slides := []string{testPath("test", "data", "slides", "1.png"), testPath("test", "data", "slides", "2.png")}
-
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil).Once()
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil).Once()
-
-		// Spanish: Load from cache (cache hit)
-		mockText.On("Load", mock.Anything, esTextPath).
-			Return(cachedSpanishTexts, nil).Once()
-		mockAudio.On("GenerateBatch", mock.Anything, cachedSpanishTexts, esAudioDir).
-			Return([]string{testPath("test", "data", "cache", "es", "audio", "0.mp3"), testPath("test", "data", "cache", "es", "audio", "1.mp3")}, nil).Once()
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides,
-			[]string{testPath("test", "data", "cache", "es", "audio", "0.mp3"), testPath("test", "data", "cache", "es", "audio", "1.mp3")},
-			esOutputPath).
-			Return(nil).Once()
-
-		// French: No cache, needs translation (cache miss)
-		mockTranslation.On("TranslateBatch", mock.Anything, inputTexts, "fr").
-			Return(frenchTexts, nil).Once()
-		mockText.On("Save", mock.Anything, frTextPath, frenchTexts).
-			Return(nil).Once()
-		mockAudio.On("GenerateBatch", mock.Anything, frenchTexts, frAudioDir).
-			Return([]string{testPath("test", "data", "cache", "fr", "audio", "0.mp3"), testPath("test", "data", "cache", "fr", "audio", "1.mp3")}, nil).Once()
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides,
-			[]string{testPath("test", "data", "cache", "fr", "audio", "0.mp3"), testPath("test", "data", "cache", "fr", "audio", "1.mp3")},
-			frOutputPath).
-			Return(nil).Once()
-
-		// Create service
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
-
-		// Execute with both Spanish (cached) and French (not cached)
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"es", "fr"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		// Assert
-		assert.NoError(t, err)
-		// Translation API should be called exactly once (only for French)
-		mockTranslation.AssertNumberOfCalls(t, "TranslateBatch", 1)
-		mockTranslation.AssertExpectations(t)
+		assert.Equal(t, 3, client.callCount)
 	})
 }
 
-// TestAudioGenerationCacheHits verifies that audio generation API calls are properly cached
+// TestAudioGenerationCacheHits verifies that audio generation API calls are properly cached.
 func TestAudioGenerationCacheHits(t *testing.T) {
 	t.Run("no cache hit on first audio generation", func(t *testing.T) {
 		fs := afero.NewMemMapFs()
@@ -235,7 +129,6 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		texts := []string{"Hello", "World"}
 		outputDir := testPath("output")
 
-		// First generation - API should be called for each text
 		mockClient.On("GenerateSpeech", mock.Anything, "Hello").
 			Return(newCacheTestReadCloser("audio1"), nil).Once()
 		mockClient.On("GenerateSpeech", mock.Anything, "World").
@@ -246,7 +139,6 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Len(t, paths, 2)
-		// Verify API was called exactly twice (once per text)
 		mockClient.AssertNumberOfCalls(t, "GenerateSpeech", 2)
 		mockClient.AssertExpectations(t)
 	})
@@ -261,7 +153,6 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		texts := []string{"Hello", "World"}
 		outputDir := testPath("output")
 
-		// First generation - API should be called
 		mockClient.On("GenerateSpeech", mock.Anything, "Hello").
 			Return(newCacheTestReadCloser("audio1"), nil).Once()
 		mockClient.On("GenerateSpeech", mock.Anything, "World").
@@ -271,12 +162,10 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		paths1, err := service.GenerateBatch(ctx, texts, outputDir)
 		require.NoError(t, err)
 
-		// Second generation with same texts - should use cache, API not called
 		paths2, err := service.GenerateBatch(ctx, texts, outputDir)
 		assert.NoError(t, err)
 		assert.Equal(t, paths1, paths2)
 
-		// Verify API was called exactly twice total (only during first generation)
 		mockClient.AssertNumberOfCalls(t, "GenerateSpeech", 2)
 		mockClient.AssertExpectations(t)
 	})
@@ -289,10 +178,9 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		service := NewAudioService(fs, mockClient, textService, logger)
 
 		initialTexts := []string{"Hello", "World"}
-		modifiedTexts := []string{"Hello", "Universe"} // First text unchanged, second changed
+		modifiedTexts := []string{"Hello", "Universe"}
 		outputDir := testPath("output")
 
-		// First generation - API called for both texts
 		mockClient.On("GenerateSpeech", mock.Anything, "Hello").
 			Return(newCacheTestReadCloser("audio1"), nil).Once()
 		mockClient.On("GenerateSpeech", mock.Anything, "World").
@@ -302,8 +190,6 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		_, err := service.GenerateBatch(ctx, initialTexts, outputDir)
 		require.NoError(t, err)
 
-		// Second generation with one changed text
-		// "Hello" should use cache, "Universe" should call API
 		mockClient.On("GenerateSpeech", mock.Anything, "Universe").
 			Return(newCacheTestReadCloser("audio3"), nil).Once()
 
@@ -311,7 +197,6 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, paths, 2)
 
-		// Verify API was called 3 times total (2 first run + 1 second run for "Universe")
 		mockClient.AssertNumberOfCalls(t, "GenerateSpeech", 3)
 		mockClient.AssertExpectations(t)
 	})
@@ -326,7 +211,6 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		text := "Hello world"
 		outputPath := testPath("output", "audio.mp3")
 
-		// First generation - should call API
 		mockClient.On("GenerateSpeech", mock.Anything, text).
 			Return(newCacheTestReadCloser("audio data"), nil).Once()
 
@@ -334,52 +218,22 @@ func TestAudioGenerationCacheHits(t *testing.T) {
 		err := service.Generate(ctx, text, outputPath)
 		require.NoError(t, err)
 
-		// Second generation with same text - should use cache, not call API again
 		err = service.Generate(ctx, text, outputPath)
 		assert.NoError(t, err)
 
-		// Verify API was called exactly once
 		mockClient.AssertNumberOfCalls(t, "GenerateSpeech", 1)
 		mockClient.AssertExpectations(t)
 	})
 }
 
-// TestFFmpegVideoCacheHits verifies that video segment generation properly reuses segments
-// Note: VideoService doesn't have explicit caching logic, but the test documents expected behavior
+// TestFFmpegVideoCacheHits verifies that video segment output paths persist as expected.
 func TestFFmpegVideoCacheHits(t *testing.T) {
-	t.Run("video segments are generated on first run", func(t *testing.T) {
-		// Note: This test documents that VideoService generates new segments each time
-		// The cache behavior for video segments relies on the filesystem persisting
-		// the .temp directory between runs
-		fs := afero.NewMemMapFs()
-		logger := &mockLogger{}
-		service := NewVideoService(fs, logger)
-
-		// This test verifies the structure, not actual ffmpeg calls
-		// since VideoService uses exec.Command which can't be easily mocked
-		assert.NotNil(t, service)
-
-		// The video service creates temp directory for segments
-		// This is where ffmpeg output caching happens via filesystem
-		tempDir := testPath("test", "data", "out", ".temp")
-		err := fs.MkdirAll(tempDir, 0755)
-		assert.NoError(t, err)
-
-		// Verify temp directory exists (where video segments would be cached)
-		exists, err := afero.DirExists(fs, tempDir)
-		assert.NoError(t, err)
-		assert.True(t, exists, "Temp directory for video segments should exist")
-	})
-
 	t.Run("video segments directory structure for caching", func(t *testing.T) {
-		// This test documents the expected directory structure for video segment caching
 		fs := afero.NewMemMapFs()
 
-		// Simulate the structure created during video generation
 		tempDir := testPath("test", "data", "out", ".temp")
 		require.NoError(t, fs.MkdirAll(tempDir, 0755))
 
-		// Simulate creation of video segments
 		segmentPaths := []string{
 			testPath("test", "data", "out", ".temp", "video_0.mp4"),
 			testPath("test", "data", "out", ".temp", "video_1.mp4"),
@@ -391,135 +245,10 @@ func TestFFmpegVideoCacheHits(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		// Verify all segments exist (simulating cache persistence)
 		for i, path := range segmentPaths {
 			exists, err := afero.Exists(fs, path)
 			assert.NoError(t, err)
 			assert.True(t, exists, "Video segment %d should exist at %s", i, path)
 		}
-
-		// Note: In production, these segments persist on disk between runs.
-		// VideoService regenerates segments only when they don't exist.
-	})
-}
-
-// TestIntegratedCacheHitCount verifies cache hits across the entire video creation workflow
-func TestIntegratedCacheHitCount(t *testing.T) {
-	t.Run("full workflow with all cache misses on first run", func(t *testing.T) {
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
-
-		// Create test data directory structure
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		translationTextPath := testPath("test", "data", "cache", "es", "text", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "es", "audio")
-		outputPath := testPath("test", "data", "out", "output-es.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld\n-\nTest"), 0644))
-
-		// Setup expectations
-		inputTexts := []string{"Hello", "World", "Test"}
-		translatedTexts := []string{"Hola", "Mundo", "Prueba"}
-		slides := []string{testPath("slide1.png"), testPath("slide2.png"), testPath("slide3.png")}
-		audioPaths := []string{testPath("audio0.mp3"), testPath("audio1.mp3"), testPath("audio2.mp3")}
-
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil).Once()
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil).Once()
-		mockTranslation.On("TranslateBatch", mock.Anything, inputTexts, "es").
-			Return(translatedTexts, nil).Once()
-		mockText.On("Save", mock.Anything, translationTextPath, translatedTexts).
-			Return(nil).Once()
-		mockAudio.On("GenerateBatch", mock.Anything, translatedTexts, audioDir).
-			Return(audioPaths, nil).Once()
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).
-			Return(nil).Once()
-
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
-
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"es"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		assert.NoError(t, err)
-
-		// Verify cache misses (all API calls made)
-		mockTranslation.AssertNumberOfCalls(t, "TranslateBatch", 1) // Translation API called
-		mockAudio.AssertNumberOfCalls(t, "GenerateBatch", 1)        // Audio API called
-		mockVideo.AssertNumberOfCalls(t, "GenerateFromSlides", 1)   // Video generation called
-
-		mockText.AssertExpectations(t)
-		mockTranslation.AssertExpectations(t)
-		mockAudio.AssertExpectations(t)
-		mockVideo.AssertExpectations(t)
-	})
-
-	t.Run("full workflow with all cache hits on second run", func(t *testing.T) {
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
-
-		// Create test data with all caches populated
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		translationTextPath := testPath("test", "data", "cache", "es", "text", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "es", "audio")
-		outputPath := testPath("test", "data", "out", "output-es.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, fs.MkdirAll(filepath.Dir(translationTextPath), 0755))
-		require.NoError(t, fs.MkdirAll(audioDir, 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld"), 0644))
-		require.NoError(t, afero.WriteFile(fs, translationTextPath, []byte("Hola\n-\nMundo"), 0644))
-
-		inputTexts := []string{"Hello", "World"}
-		cachedTexts := []string{"Hola", "Mundo"}
-		slides := []string{testPath("slide1.png"), testPath("slide2.png")}
-
-		// Note: Audio cache is handled by AudioService internally, not by VideoCreator
-		// VideoCreator just calls GenerateBatch which handles its own caching
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil).Once()
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil).Once()
-		mockText.On("Load", mock.Anything, translationTextPath).
-			Return(cachedTexts, nil).Once()
-		mockAudio.On("GenerateBatch", mock.Anything, cachedTexts, audioDir).
-			Return([]string{testPath("audio0.mp3"), testPath("audio1.mp3")}, nil).Once()
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides,
-			[]string{testPath("audio0.mp3"), testPath("audio1.mp3")}, outputPath).
-			Return(nil).Once()
-
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
-
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"es"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		assert.NoError(t, err)
-
-		// Verify cache hits (translation API not called)
-		mockTranslation.AssertNumberOfCalls(t, "TranslateBatch", 0) // Translation cache hit
-		// Note: Audio and video would still be called but with cached data
-		mockAudio.AssertNumberOfCalls(t, "GenerateBatch", 1)
-		mockVideo.AssertNumberOfCalls(t, "GenerateFromSlides", 1)
 	})
 }

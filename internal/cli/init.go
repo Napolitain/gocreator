@@ -17,7 +17,7 @@ func NewInitCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize a new GoCreator project",
-		Long:  `Creates a default gocreator.yaml configuration file and directory structure.`,
+		Long:  `Creates a default gocreator.yaml configuration file, project directories, and example sidecar narration files.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInit(force)
 		},
@@ -67,20 +67,18 @@ func runInit(force bool) error {
 		fmt.Printf("  ✓ %s/\n", dir)
 	}
 
-	// Create example text file
-	textsPath := filepath.Join("data", "texts.txt")
-	exampleText := `Welcome to GoCreator
--
-This is an example narration text for your first slide
--
-You can add more slides and narration here
--
-Each section is separated by a single dash on its own line`
-
-	if err := afero.WriteFile(fs, textsPath, []byte(exampleText), 0644); err != nil {
-		return fmt.Errorf("failed to create example text file: %w", err)
+	// Create example sidecar text files
+	exampleSidecars := map[string]string{
+		filepath.Join("data", "slides", "01-welcome.txt"): "Welcome to GoCreator",
+		filepath.Join("data", "slides", "02-details.txt"): "Add a matching slide file such as 02-details.png or 02-details.mp4.",
 	}
-	fmt.Printf("  ✓ %s\n", textsPath)
+
+	for path, content := range exampleSidecars {
+		if err := afero.WriteFile(fs, path, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to create example sidecar file %s: %w", path, err)
+		}
+		fmt.Printf("  ✓ %s\n", path)
+	}
 
 	// Create .gitignore
 	gitignorePath := ".gitignore"
@@ -115,8 +113,8 @@ Thumbs.db
 
 	fmt.Println("\n✓ Project initialized successfully!")
 	fmt.Println("\nNext steps:")
-	fmt.Println("  1. Add your slides to data/slides/")
-	fmt.Println("  2. Edit data/texts.txt with your narration")
+	fmt.Println("  1. Add your slide media to data/slides/ (for example 01-welcome.png)")
+	fmt.Println("  2. Keep narration next to each slide as matching .txt, .<lang>.txt, or audio sidecars")
 	fmt.Println("  3. Review and edit gocreator.yaml")
 	fmt.Println("  4. Run: gocreator create")
 

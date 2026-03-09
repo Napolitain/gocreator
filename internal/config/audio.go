@@ -9,12 +9,12 @@ type AudioConfig struct {
 
 // BackgroundMusicConfig represents background music settings
 type BackgroundMusicConfig struct {
-	Enabled  bool    `yaml:"enabled,omitempty"`
-	File     string  `yaml:"file,omitempty"`
-	Volume   float64 `yaml:"volume,omitempty"`   // 0.0 to 1.0
-	FadeIn   float64 `yaml:"fade_in,omitempty"`  // seconds
-	FadeOut  float64 `yaml:"fade_out,omitempty"` // seconds
-	Loop     bool    `yaml:"loop,omitempty"`
+	Enabled bool    `yaml:"enabled,omitempty"`
+	File    string  `yaml:"file,omitempty"`
+	Volume  float64 `yaml:"volume,omitempty"`   // 0.0 to 1.0
+	FadeIn  float64 `yaml:"fade_in,omitempty"`  // seconds
+	FadeOut float64 `yaml:"fade_out,omitempty"` // seconds
+	Loop    bool    `yaml:"loop,omitempty"`
 }
 
 // SoundEffectConfig represents a sound effect configuration

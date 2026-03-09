@@ -18,7 +18,8 @@ type VideoCreatorConfig struct {
 	InputLang        string
 	OutputLangs      []string
 	ProgressCallback interfaces.ProgressCallback
-	Transition       TransitionConfig      // Transition configuration for slide transitions
+	Transition       TransitionConfig        // Transition configuration for slide transitions
+	Timing           config.TimingConfig     // Timing and alignment configuration
 	MultiView        *config.MultiViewConfig // Multi-view configuration for split-screen layouts
 }
 
@@ -66,6 +67,10 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 
 	// Configure video service with transitions and multi-view if available
 	if videoService, ok := vc.videoService.(*VideoService); ok {
+		if err := videoService.SetMediaAlignment(cfg.Timing.MediaAlignment); err != nil {
+			return fmt.Errorf("invalid media alignment: %w", err)
+		}
+
 		if err := cfg.Transition.Validate(); err == nil && cfg.Transition.IsEnabled() {
 			videoService.SetTransition(cfg.Transition)
 			vc.logger.Info("Transitions enabled", "type", cfg.Transition.Type, "duration", cfg.Transition.Duration)
@@ -84,24 +89,11 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 		}
 	}
 
-	var inputTexts []string
 	var slides []string
 	var err error
 
 	// Loading stage
 	progress.OnStageStart("Loading")
-
-	progress.OnStageProgress("Loading", 20, "Loading local files")
-
-	// Load input texts from file
-	textsPath := filepath.Join(dataDir, "texts.txt")
-	inputTexts, err = vc.textService.Load(ctx, textsPath)
-	if err != nil {
-		progress.OnStageComplete("Loading", false, fmt.Sprintf("Failed: %v", err))
-		return fmt.Errorf("failed to load input texts: %w", err)
-	}
-
-	vc.logger.Info("Loaded texts", "count", len(inputTexts))
 
 	progress.OnStageProgress("Loading", 60, "Loading slides")
 
@@ -115,9 +107,9 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 
 	vc.logger.Info("Loaded slides", "count", len(slides))
 
-	if len(slides) != len(inputTexts) {
-		progress.OnStageComplete("Loading", false, "Slide/text count mismatch")
-		return fmt.Errorf("slide and text count mismatch: %d slides, %d texts", len(slides), len(inputTexts))
+	if len(slides) == 0 {
+		progress.OnStageComplete("Loading", false, "No slides found")
+		return fmt.Errorf("no slides found in %s", slidesDir)
 	}
 
 	progress.OnStageComplete("Loading", true, fmt.Sprintf("Loaded %d slides", len(slides)))
@@ -125,19 +117,19 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 	// Process each language in parallel
 	var wg sync.WaitGroup
 	errors := make([]error, len(cfg.OutputLangs))
-	
+
 	for i, lang := range cfg.OutputLangs {
 		wg.Add(1)
 		go func(idx int, l string) {
 			defer wg.Done()
-			if err := vc.processLanguage(ctx, cfg, l, inputTexts, slides, dataDir, progress); err != nil {
+			if err := vc.processLanguage(ctx, cfg, l, slides, slidesDir, dataDir, progress); err != nil {
 				errors[idx] = fmt.Errorf("failed to process language %s: %w", l, err)
 			}
 		}(i, lang)
 	}
-	
+
 	wg.Wait()
-	
+
 	// Check for any errors
 	for _, err := range errors {
 		if err != nil {
@@ -152,8 +144,8 @@ func (vc *VideoCreator) processLanguage(
 	ctx context.Context,
 	cfg VideoCreatorConfig,
 	lang string,
-	inputTexts []string,
 	slides []string,
+	slidesDir string,
 	dataDir string,
 	progress interfaces.ProgressCallback,
 ) error {
@@ -161,73 +153,39 @@ func (vc *VideoCreator) processLanguage(
 	logger.Info("Processing language")
 
 	cacheDir := filepath.Join(dataDir, "cache", lang)
-	textDir := filepath.Join(cacheDir, "text")
 	audioDir := filepath.Join(cacheDir, "audio")
-
-	var texts []string
-	var err error
 
 	// Translation stage
 	progress.OnItemStart("Translation", lang)
-	
-	// Translate if needed
-	if lang == cfg.InputLang {
-		texts = inputTexts
-		progress.OnItemComplete("Translation", lang, true, "Using original text")
-	} else {
-		textsPath := filepath.Join(textDir, "texts.txt")
+	progress.OnItemProgress("Translation", lang, 40, "Resolving slide sidecars...")
+	texts, translatedCount, err := vc.resolveTextsForLanguage(ctx, cfg.InputLang, lang, slidesDir, slides)
+	if err != nil {
+		progress.OnItemComplete("Translation", lang, false, fmt.Sprintf("Error: %v", err))
+		return fmt.Errorf("failed to resolve texts: %w", err)
+	}
 
-		// Check if translation exists
-		exists, err := afero.Exists(vc.fs, textsPath)
-		if err != nil {
-			progress.OnItemComplete("Translation", lang, false, fmt.Sprintf("Error: %v", err))
-			return fmt.Errorf("failed to check translation cache: %w", err)
-		}
-
-		if exists {
-			logger.Info("Loading cached translation")
-			progress.OnItemProgress("Translation", lang, 50, "Loading from cache")
-			texts, err = vc.textService.Load(ctx, textsPath)
-			if err != nil {
-				progress.OnItemComplete("Translation", lang, false, fmt.Sprintf("Error: %v", err))
-				return fmt.Errorf("failed to load cached translation: %w", err)
-			}
-			progress.OnItemComplete("Translation", lang, true, "Loaded from cache")
-		} else {
-			logger.Info("Translating texts")
-			progress.OnItemProgress("Translation", lang, 30, "Translating...")
-			texts, err = vc.translationService.TranslateBatch(ctx, inputTexts, lang)
-			if err != nil {
-				progress.OnItemComplete("Translation", lang, false, fmt.Sprintf("Error: %v", err))
-				return fmt.Errorf("translation failed: %w", err)
-			}
-
-			// Save translated texts
-			if err := vc.textService.Save(ctx, textsPath, texts); err != nil {
-				progress.OnItemComplete("Translation", lang, false, fmt.Sprintf("Error: %v", err))
-				return fmt.Errorf("failed to save translation: %w", err)
-			}
-			progress.OnItemComplete("Translation", lang, true, fmt.Sprintf("Translated %d texts", len(texts)))
-		}
+	switch {
+	case translatedCount > 0:
+		progress.OnItemComplete("Translation", lang, true, fmt.Sprintf("Translated %d slide texts", translatedCount))
+	default:
+		progress.OnItemComplete("Translation", lang, true, "Using local sidecars")
 	}
 
 	// Audio generation stage
 	progress.OnItemStart("Audio Generation", lang)
-	logger.Info("Generating audio")
-	progress.OnItemProgress("Audio Generation", lang, 20, "Generating speech...")
-	
-	audioPaths, err := vc.audioService.GenerateBatch(ctx, texts, audioDir)
+	progress.OnItemProgress("Audio Generation", lang, 30, "Resolving narration...")
+	audioPaths, prerecordedCount, generatedCount, err := vc.resolveAudioForLanguage(ctx, cfg.InputLang, lang, slidesDir, slides, texts, audioDir)
 	if err != nil {
 		progress.OnItemComplete("Audio Generation", lang, false, fmt.Sprintf("Error: %v", err))
 		return fmt.Errorf("audio generation failed: %w", err)
 	}
-	progress.OnItemComplete("Audio Generation", lang, true, fmt.Sprintf("Generated %d audio files", len(audioPaths)))
+	progress.OnItemComplete("Audio Generation", lang, true, fmt.Sprintf("Using %d prerecorded and %d generated tracks", prerecordedCount, generatedCount))
 
 	// Video assembly stage
 	progress.OnItemStart("Video Assembly", lang)
 	logger.Info("Generating video")
 	progress.OnItemProgress("Video Assembly", lang, 30, "Assembling video...")
-	
+
 	outputDir := filepath.Join(dataDir, "out")
 	outputPath := filepath.Join(outputDir, fmt.Sprintf("output-%s.mp4", lang))
 

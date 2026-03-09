@@ -5,6 +5,23 @@ data/cache/
 *.mp3
 *.wav
 
+# Keep committed media for the minimal example projects
+!minimal-sidecar-tts/data/
+!minimal-sidecar-tts/data/slides/
+!minimal-sidecar-tts/data/slides/*.png
+!video-prerecorded/data/
+!video-prerecorded/data/slides/
+!video-prerecorded/data/slides/*.mp4
+!video-prerecorded/data/slides/*.wav
+!video-align-to-audio/data/
+!video-align-to-audio/data/slides/
+!video-align-to-audio/data/slides/*.mp4
+!video-align-to-audio/data/slides/*.wav
+!language-overrides/data/
+!language-overrides/data/slides/
+!language-overrides/data/slides/*.png
+!language-overrides/data/slides/*.wav
+
 # OS files
 .DS_Store
 Thumbs.db

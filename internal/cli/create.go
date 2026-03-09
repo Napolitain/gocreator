@@ -29,8 +29,8 @@ func NewCreateCommand() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Create videos with translations",
-		Long:  `Create videos by processing text files, generating translations, audio, and combining with slides.`,
+		Short: "Create videos from slide sidecars",
+		Long:  `Create videos by loading local slide media, inferring per-slide text and audio sidecars, generating translations and TTS when needed, and assembling the result.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(inputLang, outputLangs, configFile, noProgress)
 		},
@@ -69,7 +69,7 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 		if err != nil {
 			return fmt.Errorf("error searching for config file: %w", err)
 		}
-		
+
 		if foundPath != "" {
 			cfg, err = config.LoadConfig(fs, foundPath)
 			if err != nil {
@@ -108,7 +108,7 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 		progressModel := ui.NewProgressModel()
 		prog = tea.NewProgram(progressModel)
 		progressAdapter = ui.NewProgressAdapter(prog)
-		
+
 		// Run progress UI in background
 		go func() {
 			if _, err := prog.Run(); err != nil {
@@ -123,11 +123,11 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 
 	// Create services with dependency injection
 	textService := services.NewTextService(fs, logger)
-	
+
 	// Create translation service with disk cache
 	translationCacheDir := filepath.Join(rootDir, cfg.Cache.Directory, "translations")
 	translationService := services.NewTranslationServiceWithCache(openaiAdapter, logger, fs, translationCacheDir)
-	
+
 	audioService := services.NewAudioService(fs, openaiAdapter, textService, logger)
 	videoService := services.NewVideoService(fs, logger)
 	slideService := services.NewSlideService(fs, logger)
@@ -170,6 +170,7 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 		OutputLangs:      cfg.Output.Languages,
 		ProgressCallback: progressCallback,
 		Transition:       transition,
+		Timing:           cfg.Timing,
 		MultiView:        &cfg.MultiView,
 	}
 

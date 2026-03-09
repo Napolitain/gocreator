@@ -9,7 +9,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "gocreator",
 		Short: "GoCreator - A video creation tool",
-		Long:  `GoCreator is a CLI tool for creating videos with translations and audio.`,
+		Long:  `GoCreator is a CLI tool for creating videos from local slides plus inferred text and audio sidecars.`,
 	}
 
 	// Add subcommands

@@ -1,0 +1,15 @@
+# Minimal example: one video slide plus one prerecorded audio sidecar.
+# No OPENAI_API_KEY is required because 01-demo.wav is used directly.
+
+input:
+  lang: en
+
+output:
+  languages:
+    - en
+
+transition:
+  type: none
+
+timing:
+  media_alignment: video

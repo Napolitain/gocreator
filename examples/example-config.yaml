@@ -1,6 +1,7 @@
 # GoCreator configuration schema example
-# The create command currently uses local slides plus input.lang, output.languages,
-# cache, transition, and multi_view. Other sections remain in the schema for later wiring.
+# The create command currently uses local slides plus per-slide sidecar text/audio files,
+# along with input.lang, output.languages, cache, transition, and multi_view.
+# Other sections remain in the schema for later wiring.
 
 input:
   # Input language (required)
@@ -56,3 +57,7 @@ transition:
   # Range: 0.0 to 5.0 seconds
   # Note: Transitions will overlap between slides
   duration: 0.5
+
+timing:
+  # video = keep clip duration, slide = match narration duration
+  media_alignment: video

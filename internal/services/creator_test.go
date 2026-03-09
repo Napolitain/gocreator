@@ -13,255 +13,238 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestVideoCreator_Create(t *testing.T) {
-	t.Run("successful video creation", func(t *testing.T) {
-		// Setup mocks
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
+func TestVideoCreatorCreate_UsesSourceTextSidecars(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockText := new(mocks.MockTextProcessor)
+	mockTranslation := new(mocks.MockTranslator)
+	mockAudio := new(mocks.MockAudioGenerator)
+	mockVideo := new(mocks.MockVideoGenerator)
+	mockSlide := new(mocks.MockSlideLoader)
+	logger := &mockLogger{}
 
-		// Create test data directory structure
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "en", "audio")
-		outputPath := testPath("test", "data", "out", "output-en.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Text 1\n-\nText 2"), 0644))
+	rootDir := testPath("test")
+	slidesDir := testPath("test", "data", "slides")
+	outputPath := testPath("test", "data", "out", "output-en.mp4")
+	slides := []string{
+		testPath("test", "data", "slides", "1.png"),
+		testPath("test", "data", "slides", "2.png"),
+	}
+	audioPaths := []string{
+		testPath("test", "data", "cache", "en", "audio", "0.mp3"),
+		testPath("test", "data", "cache", "en", "audio", "1.mp3"),
+	}
 
-		// Setup expectations
-		inputTexts := []string{"Text 1", "Text 2"}
-		slides := []string{testPath("test", "data", "slides", "1.png"), testPath("test", "data", "slides", "2.png")}
-		audioPaths := []string{testPath("test", "data", "cache", "en", "audio", "0.mp3"), testPath("test", "data", "cache", "en", "audio", "1.mp3")}
+	require.NoError(t, fs.MkdirAll(slidesDir, 0755))
+	require.NoError(t, afero.WriteFile(fs, slides[0], []byte("slide1"), 0644))
+	require.NoError(t, afero.WriteFile(fs, slides[1], []byte("slide2"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "1.txt"), []byte("Text 1"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "2.txt"), []byte("Text 2"), 0644))
 
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil)
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil)
-		mockAudio.On("GenerateBatch", mock.Anything, inputTexts, audioDir).
-			Return(audioPaths, nil)
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).
-			Return(nil)
+	mockSlide.On("LoadSlides", mock.Anything, slidesDir).Return(slides, nil).Once()
+	mockAudio.On("Generate", mock.Anything, "Text 1", audioPaths[0]).Return(nil).Once()
+	mockAudio.On("Generate", mock.Anything, "Text 2", audioPaths[1]).Return(nil).Once()
+	mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).Return(nil).Once()
 
-		// Create service
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
-
-		// Execute
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"en"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		// Assert
-		assert.NoError(t, err)
-		mockText.AssertExpectations(t)
-		mockSlide.AssertExpectations(t)
-		mockAudio.AssertExpectations(t)
-		mockVideo.AssertExpectations(t)
+	creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	err := creator.Create(context.Background(), VideoCreatorConfig{
+		RootDir:     rootDir,
+		InputLang:   "en",
+		OutputLangs: []string{"en"},
 	})
 
-	t.Run("video creation with translation", func(t *testing.T) {
-		// Setup mocks
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
+	require.NoError(t, err)
+	mockTranslation.AssertNotCalled(t, "TranslateBatch")
+	mockSlide.AssertExpectations(t)
+	mockAudio.AssertExpectations(t)
+	mockVideo.AssertExpectations(t)
+}
 
-		// Create test data directory structure
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		translationTextPath := testPath("test", "data", "cache", "es", "text", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "es", "audio")
-		outputPath := testPath("test", "data", "out", "output-es.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld"), 0644))
+func TestVideoCreatorCreate_TranslatesOnlySlidesWithoutLanguageOverride(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockText := new(mocks.MockTextProcessor)
+	mockTranslation := new(mocks.MockTranslator)
+	mockAudio := new(mocks.MockAudioGenerator)
+	mockVideo := new(mocks.MockVideoGenerator)
+	mockSlide := new(mocks.MockSlideLoader)
+	logger := &mockLogger{}
 
-		// Setup expectations
-		inputTexts := []string{"Hello", "World"}
-		translatedTexts := []string{"Hola", "Mundo"}
-		slides := []string{testPath("test", "data", "slides", "1.png"), testPath("test", "data", "slides", "2.png")}
-		audioPaths := []string{testPath("test", "data", "cache", "es", "audio", "0.mp3"), testPath("test", "data", "cache", "es", "audio", "1.mp3")}
+	rootDir := testPath("test")
+	slidesDir := testPath("test", "data", "slides")
+	outputPath := testPath("test", "data", "out", "output-es.mp4")
+	slides := []string{
+		testPath("test", "data", "slides", "1.png"),
+		testPath("test", "data", "slides", "2.png"),
+	}
+	audioPaths := []string{
+		testPath("test", "data", "cache", "es", "audio", "0.mp3"),
+		testPath("test", "data", "cache", "es", "audio", "1.mp3"),
+	}
 
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil)
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil)
-		mockTranslation.On("TranslateBatch", mock.Anything, inputTexts, "es").
-			Return(translatedTexts, nil)
-		mockText.On("Save", mock.Anything, translationTextPath, translatedTexts).
-			Return(nil)
-		mockAudio.On("GenerateBatch", mock.Anything, translatedTexts, audioDir).
-			Return(audioPaths, nil)
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).
-			Return(nil)
+	require.NoError(t, fs.MkdirAll(slidesDir, 0755))
+	require.NoError(t, afero.WriteFile(fs, slides[0], []byte("slide1"), 0644))
+	require.NoError(t, afero.WriteFile(fs, slides[1], []byte("slide2"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "1.txt"), []byte("Hello"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "2.txt"), []byte("World"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "2.es.txt"), []byte("Mundo directo"), 0644))
 
-		// Create service
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	mockSlide.On("LoadSlides", mock.Anything, slidesDir).Return(slides, nil).Once()
+	mockTranslation.On("TranslateBatch", mock.Anything, []string{"Hello"}, "es").Return([]string{"Hola"}, nil).Once()
+	mockAudio.On("Generate", mock.Anything, "Hola", audioPaths[0]).Return(nil).Once()
+	mockAudio.On("Generate", mock.Anything, "Mundo directo", audioPaths[1]).Return(nil).Once()
+	mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).Return(nil).Once()
 
-		// Execute
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"es"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		// Assert
-		assert.NoError(t, err)
-		mockText.AssertExpectations(t)
-		mockTranslation.AssertExpectations(t)
-		mockSlide.AssertExpectations(t)
-		mockAudio.AssertExpectations(t)
-		mockVideo.AssertExpectations(t)
+	creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	err := creator.Create(context.Background(), VideoCreatorConfig{
+		RootDir:     rootDir,
+		InputLang:   "en",
+		OutputLangs: []string{"es"},
 	})
 
-	t.Run("video creation with cached translation", func(t *testing.T) {
-		// Setup mocks
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
+	require.NoError(t, err)
+	mockSlide.AssertExpectations(t)
+	mockTranslation.AssertExpectations(t)
+	mockAudio.AssertExpectations(t)
+	mockVideo.AssertExpectations(t)
+}
 
-		// Create test data directory structure with cached translation
-		rootDir := testPath("test")
-		slidesDir := testPath("test", "data", "slides")
-		textsPath := testPath("test", "data", "texts.txt")
-		translationTextPath := testPath("test", "data", "cache", "fr", "text", "texts.txt")
-		audioDir := testPath("test", "data", "cache", "fr", "audio")
-		outputPath := testPath("test", "data", "out", "output-fr.mp4")
-		require.NoError(t, fs.MkdirAll(slidesDir, 0755))
-		require.NoError(t, fs.MkdirAll(testPath("test", "data", "cache", "fr", "text"), 0755))
-		require.NoError(t, afero.WriteFile(fs, textsPath, []byte("Hello\n-\nWorld"), 0644))
-		require.NoError(t, afero.WriteFile(fs, translationTextPath, []byte("Bonjour\n-\nMonde"), 0644))
+func TestVideoCreatorCreate_UsesPrerecordedAudioPerSlide(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockText := new(mocks.MockTextProcessor)
+	mockTranslation := new(mocks.MockTranslator)
+	mockAudio := new(mocks.MockAudioGenerator)
+	mockVideo := new(mocks.MockVideoGenerator)
+	mockSlide := new(mocks.MockSlideLoader)
+	logger := &mockLogger{}
 
-		// Setup expectations
-		inputTexts := []string{"Hello", "World"}
-		cachedTexts := []string{"Bonjour", "Monde"}
-		slides := []string{testPath("test", "data", "slides", "1.png"), testPath("test", "data", "slides", "2.png")}
-		audioPaths := []string{testPath("test", "data", "cache", "fr", "audio", "0.mp3"), testPath("test", "data", "cache", "fr", "audio", "1.mp3")}
+	rootDir := testPath("test")
+	slidesDir := testPath("test", "data", "slides")
+	outputPath := testPath("test", "data", "out", "output-es.mp4")
+	slides := []string{
+		testPath("test", "data", "slides", "1.png"),
+		testPath("test", "data", "slides", "2.png"),
+	}
+	audioPaths := []string{
+		testPath("test", "data", "cache", "es", "audio", "0.mp3"),
+		testPath("test", "data", "slides", "2.es.wav"),
+	}
 
-		mockText.On("Load", mock.Anything, textsPath).
-			Return(inputTexts, nil)
-		mockSlide.On("LoadSlides", mock.Anything, slidesDir).
-			Return(slides, nil)
-		// Translation should load from cache, not translate
-		mockText.On("Load", mock.Anything, translationTextPath).
-			Return(cachedTexts, nil)
-		mockAudio.On("GenerateBatch", mock.Anything, cachedTexts, audioDir).
-			Return(audioPaths, nil)
-		mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).
-			Return(nil)
+	require.NoError(t, fs.MkdirAll(slidesDir, 0755))
+	require.NoError(t, afero.WriteFile(fs, slides[0], []byte("slide1"), 0644))
+	require.NoError(t, afero.WriteFile(fs, slides[1], []byte("slide2"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "1.txt"), []byte("Hello"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "2.es.wav"), []byte("audio"), 0644))
 
-		// Create service
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	mockSlide.On("LoadSlides", mock.Anything, slidesDir).Return(slides, nil).Once()
+	mockTranslation.On("TranslateBatch", mock.Anything, []string{"Hello"}, "es").Return([]string{"Hola"}, nil).Once()
+	mockAudio.On("Generate", mock.Anything, "Hola", audioPaths[0]).Return(nil).Once()
+	mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).Return(nil).Once()
 
-		// Execute
-		cfg := VideoCreatorConfig{
-			RootDir:     rootDir,
-			InputLang:   "en",
-			OutputLangs: []string{"fr"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		// Assert
-		assert.NoError(t, err)
-		mockText.AssertExpectations(t)
-		mockSlide.AssertExpectations(t)
-		mockAudio.AssertExpectations(t)
-		mockVideo.AssertExpectations(t)
-		// Translation should NOT be called since we used cache
-		mockTranslation.AssertNotCalled(t, "TranslateBatch")
+	creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	err := creator.Create(context.Background(), VideoCreatorConfig{
+		RootDir:     rootDir,
+		InputLang:   "en",
+		OutputLangs: []string{"es"},
 	})
 
-	t.Run("error loading texts", func(t *testing.T) {
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
+	require.NoError(t, err)
+	mockSlide.AssertExpectations(t)
+	mockTranslation.AssertExpectations(t)
+	mockAudio.AssertExpectations(t)
+	mockVideo.AssertExpectations(t)
+}
 
-		mockText.On("Load", mock.Anything, testPath("test", "data", "texts.txt")).
-			Return(nil, errors.New("file not found"))
+func TestVideoCreatorCreate_UsesGenericAudioForInputLanguage(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockText := new(mocks.MockTextProcessor)
+	mockTranslation := new(mocks.MockTranslator)
+	mockAudio := new(mocks.MockAudioGenerator)
+	mockVideo := new(mocks.MockVideoGenerator)
+	mockSlide := new(mocks.MockSlideLoader)
+	logger := &mockLogger{}
 
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	rootDir := testPath("test")
+	slidesDir := testPath("test", "data", "slides")
+	outputPath := testPath("test", "data", "out", "output-en.mp4")
+	slides := []string{
+		testPath("test", "data", "slides", "1.png"),
+		testPath("test", "data", "slides", "2.png"),
+	}
+	audioPaths := []string{
+		testPath("test", "data", "slides", "1.wav"),
+		testPath("test", "data", "cache", "en", "audio", "1.mp3"),
+	}
 
-		cfg := VideoCreatorConfig{
-			RootDir:     testPath("test"),
-			InputLang:   "en",
-			OutputLangs: []string{"en"},
-		}
-		err := creator.Create(context.Background(), cfg)
+	require.NoError(t, fs.MkdirAll(slidesDir, 0755))
+	require.NoError(t, afero.WriteFile(fs, slides[0], []byte("slide1"), 0644))
+	require.NoError(t, afero.WriteFile(fs, slides[1], []byte("slide2"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "1.wav"), []byte("audio"), 0644))
+	require.NoError(t, afero.WriteFile(fs, testPath("test", "data", "slides", "2.txt"), []byte("Text 2"), 0644))
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load input texts")
+	mockSlide.On("LoadSlides", mock.Anything, slidesDir).Return(slides, nil).Once()
+	mockAudio.On("Generate", mock.Anything, "Text 2", audioPaths[1]).Return(nil).Once()
+	mockVideo.On("GenerateFromSlides", mock.Anything, slides, audioPaths, outputPath).Return(nil).Once()
+
+	creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	err := creator.Create(context.Background(), VideoCreatorConfig{
+		RootDir:     rootDir,
+		InputLang:   "en",
+		OutputLangs: []string{"en"},
 	})
 
-	t.Run("error loading slides", func(t *testing.T) {
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
+	require.NoError(t, err)
+	mockTranslation.AssertNotCalled(t, "TranslateBatch")
+	mockAudio.AssertExpectations(t)
+	mockVideo.AssertExpectations(t)
+}
 
-		mockText.On("Load", mock.Anything, testPath("test", "data", "texts.txt")).
-			Return([]string{"Text 1"}, nil)
-		mockSlide.On("LoadSlides", mock.Anything, testPath("test", "data", "slides")).
-			Return(nil, errors.New("directory not found"))
+func TestVideoCreatorCreate_FailsWhenNarrationIsMissing(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockText := new(mocks.MockTextProcessor)
+	mockTranslation := new(mocks.MockTranslator)
+	mockAudio := new(mocks.MockAudioGenerator)
+	mockVideo := new(mocks.MockVideoGenerator)
+	mockSlide := new(mocks.MockSlideLoader)
+	logger := &mockLogger{}
 
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	rootDir := testPath("test")
+	slidesDir := testPath("test", "data", "slides")
+	slides := []string{testPath("test", "data", "slides", "1.png")}
 
-		cfg := VideoCreatorConfig{
-			RootDir:     testPath("test"),
-			InputLang:   "en",
-			OutputLangs: []string{"en"},
-		}
-		err := creator.Create(context.Background(), cfg)
+	require.NoError(t, fs.MkdirAll(slidesDir, 0755))
+	require.NoError(t, afero.WriteFile(fs, slides[0], []byte("slide1"), 0644))
 
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load slides")
+	mockSlide.On("LoadSlides", mock.Anything, slidesDir).Return(slides, nil).Once()
+
+	creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	err := creator.Create(context.Background(), VideoCreatorConfig{
+		RootDir:     rootDir,
+		InputLang:   "en",
+		OutputLangs: []string{"en"},
 	})
 
-	t.Run("error slide and text count mismatch", func(t *testing.T) {
-		fs := afero.NewMemMapFs()
-		mockText := new(mocks.MockTextProcessor)
-		mockTranslation := new(mocks.MockTranslator)
-		mockAudio := new(mocks.MockAudioGenerator)
-		mockVideo := new(mocks.MockVideoGenerator)
-		mockSlide := new(mocks.MockSlideLoader)
-		logger := &mockLogger{}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no matching text or audio sidecar")
+	mockVideo.AssertNotCalled(t, "GenerateFromSlides")
+}
 
-		mockText.On("Load", mock.Anything, testPath("test", "data", "texts.txt")).
-			Return([]string{"Text 1", "Text 2"}, nil)
-		mockSlide.On("LoadSlides", mock.Anything, testPath("test", "data", "slides")).
-			Return([]string{testPath("slide1.png")}, nil) // Only 1 slide but 2 texts
+func TestVideoCreatorCreate_FailsWhenSlideLoadingFails(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	mockText := new(mocks.MockTextProcessor)
+	mockTranslation := new(mocks.MockTranslator)
+	mockAudio := new(mocks.MockAudioGenerator)
+	mockVideo := new(mocks.MockVideoGenerator)
+	mockSlide := new(mocks.MockSlideLoader)
+	logger := &mockLogger{}
 
-		creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	mockSlide.On("LoadSlides", mock.Anything, testPath("test", "data", "slides")).Return(nil, errors.New("directory not found")).Once()
 
-		cfg := VideoCreatorConfig{
-			RootDir:     testPath("test"),
-			InputLang:   "en",
-			OutputLangs: []string{"en"},
-		}
-		err := creator.Create(context.Background(), cfg)
-
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "slide and text count mismatch")
+	creator := NewVideoCreator(fs, mockText, mockTranslation, mockAudio, mockVideo, mockSlide, logger)
+	err := creator.Create(context.Background(), VideoCreatorConfig{
+		RootDir:     testPath("test"),
+		InputLang:   "en",
+		OutputLangs: []string{"en"},
 	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to load slides")
 }

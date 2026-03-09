@@ -38,7 +38,7 @@ type InputConfig struct {
 type OutputConfig struct {
 	Languages []string       `yaml:"languages"`
 	Directory string         `yaml:"directory,omitempty"`
-	Format    string         `yaml:"format,omitempty"` // mp4, webm, etc
+	Format    string         `yaml:"format,omitempty"`  // mp4, webm, etc
 	Quality   string         `yaml:"quality,omitempty"` // low, medium, high, ultra
 	Formats   []FormatConfig `yaml:"formats,omitempty"` // Multi-format export
 }
@@ -107,6 +107,7 @@ func DefaultConfig() *Config {
 		Encoding:  DefaultEncodingConfig(),
 		Audio:     DefaultAudioConfig(),
 		Subtitles: DefaultSubtitlesConfig(),
+		Timing:    DefaultTimingConfig(),
 	}
 }
 
@@ -117,7 +118,7 @@ func LoadConfig(fs afero.Fs, path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to check config file: %w", err)
 	}
-	
+
 	if !exists {
 		return nil, fmt.Errorf("config file not found: %s", path)
 	}
