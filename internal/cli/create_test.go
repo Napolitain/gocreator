@@ -23,9 +23,6 @@ func TestNewCreateCommand(t *testing.T) {
 	assert.NotNil(t, langsOutFlag)
 	assert.Equal(t, "o", langsOutFlag.Shorthand)
 
-	googleSlidesFlag := cmd.Flags().Lookup("google-slides")
-	assert.NotNil(t, googleSlidesFlag)
-
 	configFlag := cmd.Flags().Lookup("config")
 	assert.NotNil(t, configFlag)
 	assert.Equal(t, "c", configFlag.Shorthand)
@@ -53,7 +50,6 @@ func TestCreateCommand_FlagsParsing(t *testing.T) {
 	err := cmd.Flags().Parse([]string{
 		"--lang", "en",
 		"--langs-out", "es,fr,de",
-		"--google-slides", "test-id-123",
 		"--config", "/path/to/config.yaml",
 		"--no-progress",
 	})
@@ -65,9 +61,6 @@ func TestCreateCommand_FlagsParsing(t *testing.T) {
 
 	langsOutFlag := cmd.Flags().Lookup("langs-out")
 	assert.Equal(t, "es,fr,de", langsOutFlag.Value.String())
-
-	googleSlidesFlag := cmd.Flags().Lookup("google-slides")
-	assert.Equal(t, "test-id-123", googleSlidesFlag.Value.String())
 
 	configFlag := cmd.Flags().Lookup("config")
 	assert.Equal(t, "/path/to/config.yaml", configFlag.Value.String())

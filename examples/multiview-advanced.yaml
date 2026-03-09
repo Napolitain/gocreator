@@ -3,7 +3,6 @@
 
 input:
   lang: en
-  source: local
 
 output:
   languages: [en, es, fr]

@@ -1,16 +1,10 @@
-# GoCreator Configuration Example
-# This file shows all available configuration options
+# GoCreator configuration schema example
+# The create command currently uses local slides plus input.lang, output.languages,
+# cache, transition, and multi_view. Other sections remain in the schema for later wiring.
 
 input:
   # Input language (required)
   lang: en
-  
-  # Source type: "local" or "google-slides" (default: "local")
-  source: local
-  
-  # Google Slides presentation ID (required if source is "google-slides")
-  # Find this in the URL: https://docs.google.com/presentation/d/[PRESENTATION_ID]/edit
-  # presentation_id: "1ABC-xyz123_EXAMPLE-ID"
 
 output:
   # Output languages (required)

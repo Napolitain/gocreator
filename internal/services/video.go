@@ -136,7 +136,7 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 		s.logger.Info("Using cached video segment", "path", outputPath)
 		return nil
 	}
-	
+
 	// Check if the slide is actually a video
 	isVideo, err := s.isVideoFile(slidePath)
 	if err != nil {
@@ -150,84 +150,56 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 		return err
 	}
 
-	var cmd *exec.Cmd
-
+	var args []string
 	if isVideo {
-		// For video input: use video duration, align audio at beginning
-		// Video determines the duration, audio is aligned at the start
 		s.logger.Debug("Processing video input", "path", slidePath)
 
-		// Get video duration to use as the final duration
 		videoDuration, err := s.getVideoDuration(slidePath)
 		if err != nil {
 			return fmt.Errorf("failed to get video duration: %w", err)
 		}
 
-		// Get audio duration and warn if significantly shorter than video
 		audioDuration, err := s.getVideoDuration(audioPath)
 		if err != nil {
 			s.logger.Warn("Failed to get audio duration, proceeding anyway", "path", audioPath, "error", err)
-		} else if audioDuration < videoDuration*0.8 { // Audio is less than 80% of video duration
-			s.logger.Warn("Audio is significantly shorter than video, remainder will be silent",
+		} else if audioDuration < videoDuration*0.8 {
+			s.logger.Warn("Audio is significantly shorter than video, remainder will follow clip audio or stay silent",
 				"video_duration", videoDuration,
 				"audio_duration", audioDuration,
 				"video_path", slidePath)
 		}
 
-		if targetWidth != iw || targetHeight != ih {
-			// Need to scale and pad video
-			scaleFilter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", targetWidth, targetHeight)
-			padFilter := fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1", targetWidth, targetHeight)
-			filterComplex := fmt.Sprintf("[0:v]%s,%s[v]", scaleFilter, padFilter)
-
-			// Use video duration as primary, trim audio to match if longer
-			cmd = exec.Command("ffmpeg", "-y",
-				"-i", slidePath,
-				"-i", audioPath,
-				"-filter_complex", filterComplex,
-				"-map", "[v]", "-map", "1:a:0",
-				"-c:v", "libx264",
-				"-c:a", "mp3", "-b:a", "192k",
-				"-pix_fmt", "yuv420p",
-				"-t", fmt.Sprintf("%.2f", videoDuration),
-				outputPath)
-		} else {
-			// No scaling needed for video
-			cmd = exec.Command("ffmpeg", "-y",
-				"-i", slidePath,
-				"-i", audioPath,
-				"-map", "0:v:0", "-map", "1:a:0",
-				"-c:v", "libx264",
-				"-c:a", "mp3", "-b:a", "192k",
-				"-pix_fmt", "yuv420p",
-				"-t", fmt.Sprintf("%.2f", videoDuration),
-				outputPath)
+		hasEmbeddedAudio, err := s.hasAudioStream(slidePath)
+		if err != nil {
+			return fmt.Errorf("failed to inspect embedded audio for %s: %w", slidePath, err)
 		}
+
+		args = s.buildSingleVideoArgs(videoRenderInput{
+			slidePath:        slidePath,
+			audioPath:        audioPath,
+			outputPath:       outputPath,
+			targetWidth:      targetWidth,
+			targetHeight:     targetHeight,
+			inputWidth:       iw,
+			inputHeight:      ih,
+			videoDuration:    videoDuration,
+			isVideo:          true,
+			hasEmbeddedAudio: hasEmbeddedAudio,
+		})
 	} else {
-		// For image input: use audio duration (current behavior)
 		s.logger.Debug("Processing image input", "path", slidePath)
-
-		if targetWidth != iw || targetHeight != ih {
-			// Need to scale and pad
-			scaleFilter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", targetWidth, targetHeight)
-			padFilter := fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1", targetWidth, targetHeight)
-			filterComplex := fmt.Sprintf("%s,%s", scaleFilter, padFilter)
-
-			cmd = exec.Command("ffmpeg", "-y", "-loop", "1", "-i", slidePath, "-i", audioPath,
-				"-vf", filterComplex,
-				"-c:v", "libx264", "-tune", "stillimage",
-				"-c:a", "mp3", "-b:a", "192k",
-				"-pix_fmt", "yuv420p", "-shortest",
-				outputPath)
-		} else {
-			// No scaling needed
-			cmd = exec.Command("ffmpeg", "-y", "-loop", "1", "-i", slidePath, "-i", audioPath,
-				"-c:v", "libx264", "-tune", "stillimage",
-				"-c:a", "mp3", "-b:a", "192k",
-				"-pix_fmt", "yuv420p", "-shortest",
-				outputPath)
-		}
+		args = s.buildSingleVideoArgs(videoRenderInput{
+			slidePath:    slidePath,
+			audioPath:    audioPath,
+			outputPath:   outputPath,
+			targetWidth:  targetWidth,
+			targetHeight: targetHeight,
+			inputWidth:   iw,
+			inputHeight:  ih,
+		})
 	}
+
+	cmd := exec.Command("ffmpeg", args...)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -247,6 +219,76 @@ func (s *VideoService) generateSingleVideo(slidePath, audioPath, outputPath stri
 	return nil
 }
 
+type videoRenderInput struct {
+	slidePath        string
+	audioPath        string
+	outputPath       string
+	targetWidth      int
+	targetHeight     int
+	inputWidth       int
+	inputHeight      int
+	videoDuration    float64
+	isVideo          bool
+	hasEmbeddedAudio bool
+}
+
+func (s *VideoService) buildSingleVideoArgs(input videoRenderInput) []string {
+	args := []string{"-y"}
+
+	if input.isVideo {
+		args = append(args, "-i", input.slidePath, "-i", input.audioPath)
+
+		videoMap := "0:v:0"
+		audioMap := "1:a:0"
+		filters := make([]string, 0, 2)
+
+		if input.targetWidth != input.inputWidth || input.targetHeight != input.inputHeight {
+			scaleFilter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", input.targetWidth, input.targetHeight)
+			padFilter := fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1", input.targetWidth, input.targetHeight)
+			filters = append(filters, fmt.Sprintf("[0:v]%s,%s[v]", scaleFilter, padFilter))
+			videoMap = "[v]"
+		}
+
+		if input.hasEmbeddedAudio {
+			filters = append(filters, "[0:a:0][1:a:0]amix=inputs=2:duration=first:dropout_transition=0[a]")
+			audioMap = "[a]"
+		}
+
+		if len(filters) > 0 {
+			args = append(args, "-filter_complex", strings.Join(filters, ";"))
+		}
+
+		args = append(args,
+			"-map", videoMap,
+			"-map", audioMap,
+			"-c:v", "libx264",
+			"-c:a", "mp3", "-b:a", "192k",
+			"-pix_fmt", "yuv420p",
+			"-t", fmt.Sprintf("%.2f", input.videoDuration),
+			input.outputPath,
+		)
+
+		return args
+	}
+
+	args = append(args, "-loop", "1", "-i", input.slidePath, "-i", input.audioPath)
+
+	if input.targetWidth != input.inputWidth || input.targetHeight != input.inputHeight {
+		scaleFilter := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease", input.targetWidth, input.targetHeight)
+		padFilter := fmt.Sprintf("pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1", input.targetWidth, input.targetHeight)
+		args = append(args, "-vf", fmt.Sprintf("%s,%s", scaleFilter, padFilter))
+	}
+
+	args = append(args,
+		"-c:v", "libx264", "-tune", "stillimage",
+		"-c:a", "mp3", "-b:a", "192k",
+		"-pix_fmt", "yuv420p", "-shortest",
+		input.outputPath,
+	)
+
+	return args
+}
+
 func (s *VideoService) concatenateVideos(videoFiles []string, outputPath string) error {
 	// Check final video cache first
 	cached, err := s.checkFinalVideoCache(videoFiles, outputPath)
@@ -257,7 +299,7 @@ func (s *VideoService) concatenateVideos(videoFiles []string, outputPath string)
 		s.logger.Info("Using cached final video", "path", outputPath)
 		return nil
 	}
-	
+
 	// If transitions are disabled or only one video, use simple concatenation
 	if !s.transition.IsEnabled() || len(videoFiles) == 1 {
 		if err := s.concatenateVideosSimple(videoFiles, outputPath); err != nil {
@@ -269,13 +311,13 @@ func (s *VideoService) concatenateVideos(videoFiles []string, outputPath string)
 			return err
 		}
 	}
-	
+
 	// Save final video hash for future cache hits
 	if err := s.saveFinalVideoHash(videoFiles, outputPath); err != nil {
 		s.logger.Warn("Failed to save final video hash", "error", err)
 		// Don't fail the operation if hash saving fails
 	}
-	
+
 	return nil
 }
 
@@ -339,7 +381,7 @@ func (s *VideoService) concatenateVideosWithTransitions(videoFiles []string, out
 			duration = 5.0 // Default fallback
 		}
 		durations[i] = duration
-		
+
 		// Warn if transition duration exceeds video duration
 		if transitionDuration >= duration {
 			s.logger.Warn("Transition duration meets or exceeds video duration, may cause unexpected behavior",
@@ -438,7 +480,7 @@ func (s *VideoService) isVideoFile(filePath string) (bool, error) {
 	}
 
 	outputStr := string(output)
-	
+
 	var hasVideoCodec bool
 	var duration float64
 
@@ -459,6 +501,23 @@ func (s *VideoService) isVideoFile(filePath string) (bool, error) {
 
 	// A video file must have video codec type and a positive duration
 	return hasVideoCodec && duration > 0, nil
+}
+
+func (s *VideoService) hasAudioStream(filePath string) (bool, error) {
+	cmd := exec.Command("ffprobe", "-v", "error",
+		"-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1:nokey=1", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("ffprobe audio stream check failed: %w", err)
+	}
+
+	for _, line := range strings.Split(string(output), "\n") {
+		if strings.TrimSpace(line) == "audio" {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // getVideoDuration gets the duration of a video file in seconds
@@ -485,13 +544,13 @@ func (s *VideoService) computeSegmentHash(slidePath, audioPath string, width, he
 	if err != nil {
 		return "", fmt.Errorf("failed to read slide file: %w", err)
 	}
-	
+
 	// Read audio file
 	audioData, err := afero.ReadFile(s.fs, audioPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read audio file: %w", err)
 	}
-	
+
 	// Compute hash of slide + audio + dimensions
 	hasher := sha256.New()
 	hasher.Write(slideData)
@@ -499,7 +558,7 @@ func (s *VideoService) computeSegmentHash(slidePath, audioPath string, width, he
 	if _, err := fmt.Fprintf(hasher, "%dx%d", width, height); err != nil {
 		return "", fmt.Errorf("failed to write dimensions to hash: %w", err)
 	}
-	
+
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
@@ -513,7 +572,7 @@ func (s *VideoService) checkSegmentCache(slidePath, audioPath, outputPath string
 	if !exists {
 		return false, nil
 	}
-	
+
 	// Check if hash file exists
 	hashPath := outputPath + ".hash"
 	hashExists, err := afero.Exists(s.fs, hashPath)
@@ -523,19 +582,19 @@ func (s *VideoService) checkSegmentCache(slidePath, audioPath, outputPath string
 	if !hashExists {
 		return false, nil
 	}
-	
+
 	// Read stored hash
 	storedHash, err := afero.ReadFile(s.fs, hashPath)
 	if err != nil {
 		return false, err
 	}
-	
+
 	// Compute current hash
 	currentHash, err := s.computeSegmentHash(slidePath, audioPath, width, height)
 	if err != nil {
 		return false, err
 	}
-	
+
 	return string(storedHash) == currentHash, nil
 }
 
@@ -545,7 +604,7 @@ func (s *VideoService) saveSegmentHash(slidePath, audioPath, outputPath string, 
 	if err != nil {
 		return err
 	}
-	
+
 	hashPath := outputPath + ".hash"
 	return afero.WriteFile(s.fs, hashPath, []byte(hash), 0644)
 }
@@ -553,7 +612,7 @@ func (s *VideoService) saveSegmentHash(slidePath, audioPath, outputPath string, 
 // computeFinalVideoHash computes a cache key for the final concatenated video
 func (s *VideoService) computeFinalVideoHash(videoFiles []string) (string, error) {
 	hasher := sha256.New()
-	
+
 	// Hash each video segment file
 	for _, videoFile := range videoFiles {
 		data, err := afero.ReadFile(s.fs, videoFile)
@@ -562,12 +621,12 @@ func (s *VideoService) computeFinalVideoHash(videoFiles []string) (string, error
 		}
 		hasher.Write(data)
 	}
-	
+
 	// Include transition configuration in hash
 	if _, err := fmt.Fprintf(hasher, "%s:%.2f", s.transition.Type, s.transition.Duration); err != nil {
 		return "", fmt.Errorf("failed to write transition config to hash: %w", err)
 	}
-	
+
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
@@ -581,7 +640,7 @@ func (s *VideoService) checkFinalVideoCache(videoFiles []string, outputPath stri
 	if !exists {
 		return false, nil
 	}
-	
+
 	// Check if hash file exists
 	hashPath := outputPath + ".hash"
 	hashExists, err := afero.Exists(s.fs, hashPath)
@@ -591,19 +650,19 @@ func (s *VideoService) checkFinalVideoCache(videoFiles []string, outputPath stri
 	if !hashExists {
 		return false, nil
 	}
-	
+
 	// Read stored hash
 	storedHash, err := afero.ReadFile(s.fs, hashPath)
 	if err != nil {
 		return false, err
 	}
-	
+
 	// Compute current hash
 	currentHash, err := s.computeFinalVideoHash(videoFiles)
 	if err != nil {
 		return false, err
 	}
-	
+
 	return string(storedHash) == currentHash, nil
 }
 
@@ -613,7 +672,7 @@ func (s *VideoService) saveFinalVideoHash(videoFiles []string, outputPath string
 	if err != nil {
 		return err
 	}
-	
+
 	hashPath := outputPath + ".hash"
 	return afero.WriteFile(s.fs, hashPath, []byte(hash), 0644)
 }

@@ -12,7 +12,6 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 	
 	assert.Equal(t, "en", cfg.Input.Lang)
-	assert.Equal(t, "local", cfg.Input.Source)
 	assert.Equal(t, []string{"en"}, cfg.Output.Languages)
 	assert.Equal(t, "./data/out", cfg.Output.Directory)
 	assert.Equal(t, "mp4", cfg.Output.Format)
@@ -35,8 +34,6 @@ func TestLoadConfig(t *testing.T) {
 			name: "valid config",
 			yamlContent: `input:
   lang: fr
-  source: google-slides
-  presentation_id: "123abc"
 output:
   languages: [fr, en, es]
   directory: ./videos
@@ -53,8 +50,6 @@ cache:
 			wantErr: false,
 			validate: func(t *testing.T, cfg *Config) {
 				assert.Equal(t, "fr", cfg.Input.Lang)
-				assert.Equal(t, "google-slides", cfg.Input.Source)
-				assert.Equal(t, "123abc", cfg.Input.PresentationID)
 				assert.Equal(t, []string{"fr", "en", "es"}, cfg.Output.Languages)
 				assert.Equal(t, "./videos", cfg.Output.Directory)
 				assert.Equal(t, "webm", cfg.Output.Format)
@@ -156,8 +151,7 @@ func TestSaveConfig(t *testing.T) {
 	
 	cfg := &Config{
 		Input: InputConfig{
-			Lang:   "de",
-			Source: "local",
+			Lang: "de",
 		},
 		Output: OutputConfig{
 			Languages: []string{"de", "en"},

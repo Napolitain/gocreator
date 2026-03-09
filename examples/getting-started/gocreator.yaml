@@ -1,6 +1,5 @@
 input:
   lang: en
-  source: local
 output:
   languages:
   - en
@@ -14,3 +13,52 @@ voice:
 cache:
   enabled: true
   directory: ./data/cache
+transition:
+  type: none
+encoding:
+  video:
+    codec: libx264
+    preset: medium
+    crf: 23
+    bitrate: auto
+    fps: 30
+    pixel_format: yuv420p
+  audio:
+    codec: aac
+    bitrate: 192k
+    sample_rate: 48000
+audio:
+  background_music:
+    volume: 0.15
+    fade_in: 2.0
+    fade_out: 3.0
+    loop: true
+  ducking:
+    threshold: -30.0
+    ratio: 0.3
+    attack: 0.5
+    release: 1.0
+subtitles:
+  generate: true
+  languages: all
+  burn_in: true
+  style:
+    font: Arial
+    font_size: 24
+    color: white
+    outline_color: black
+    outline_width: 2
+    shadow_color: black
+    shadow_offset: 2
+    background_color: black
+    background_opacity: 0.5
+    background_padding: 5
+    position: bottom
+    alignment: center
+    margin_vertical: 20
+    margin_horizontal: 10
+  timing:
+    max_chars_per_line: 42
+    max_lines: 2
+    min_duration: 1.0
+    max_duration: 7.0

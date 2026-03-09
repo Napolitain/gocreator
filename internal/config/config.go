@@ -31,9 +31,7 @@ type Config struct {
 
 // InputConfig represents input configuration
 type InputConfig struct {
-	Lang           string `yaml:"lang"`
-	Source         string `yaml:"source,omitempty"`         // "local" or "google-slides"
-	PresentationID string `yaml:"presentation_id,omitempty"` // Google Slides ID
+	Lang string `yaml:"lang"`
 }
 
 // OutputConfig represents output configuration
@@ -85,8 +83,7 @@ type TransitionConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Input: InputConfig{
-			Lang:   "en",
-			Source: "local",
+			Lang: "en",
 		},
 		Output: OutputConfig{
 			Languages: []string{"en"},

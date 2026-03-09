@@ -40,7 +40,7 @@ func TestAudioService_Generate(t *testing.T) {
 		{
 			name:        "successful generation",
 			text:        "Hello world",
-			outputPath:  "/output/audio.mp3",
+			outputPath:  testPath("output", "audio.mp3"),
 			mockData:    "mock audio data",
 			mockError:   nil,
 			expectError: false,
@@ -48,7 +48,7 @@ func TestAudioService_Generate(t *testing.T) {
 		{
 			name:        "api error",
 			text:        "Test",
-			outputPath:  "/output/audio.mp3",
+			outputPath:  testPath("output", "audio.mp3"),
 			mockData:    "",
 			mockError:   errors.New("API error"),
 			expectError: true,
@@ -101,7 +101,7 @@ func TestAudioService_Generate_WithCache(t *testing.T) {
 	service := NewAudioService(fs, mockClient, textService, logger)
 
 	text := "Hello world"
-	outputPath := "/output/audio.mp3"
+	outputPath := testPath("output", "audio.mp3")
 
 	// First generation - should call API
 	mockClient.On("GenerateSpeech", mock.Anything, text).
@@ -131,19 +131,19 @@ func TestAudioService_GenerateBatch(t *testing.T) {
 		{
 			name:      "successful batch generation",
 			texts:     []string{"Hello", "World", "Test"},
-			outputDir: "/output",
+			outputDir: testPath("output"),
 			mockData:  []string{"audio1", "audio2", "audio3"},
 			expectedPaths: []string{
-				"/output/0.mp3",
-				"/output/1.mp3",
-				"/output/2.mp3",
+				testPath("output", "0.mp3"),
+				testPath("output", "1.mp3"),
+				testPath("output", "2.mp3"),
 			},
 			expectError: false,
 		},
 		{
 			name:          "empty input",
 			texts:         []string{},
-			outputDir:     "/output",
+			outputDir:     testPath("output"),
 			mockData:      []string{},
 			expectedPaths: []string{},
 			expectError:   false,
@@ -151,10 +151,10 @@ func TestAudioService_GenerateBatch(t *testing.T) {
 		{
 			name:      "single item",
 			texts:     []string{"Test"},
-			outputDir: "/output",
+			outputDir: testPath("output"),
 			mockData:  []string{"audio1"},
 			expectedPaths: []string{
-				"/output/0.mp3",
+				testPath("output", "0.mp3"),
 			},
 			expectError: false,
 		},
@@ -206,7 +206,7 @@ func TestAudioService_GenerateBatch_WithCache(t *testing.T) {
 	service := NewAudioService(fs, mockClient, textService, logger)
 
 	texts := []string{"Hello", "World"}
-	outputDir := "/output"
+	outputDir := testPath("output")
 
 	// First batch generation
 	mockClient.On("GenerateSpeech", mock.Anything, "Hello").

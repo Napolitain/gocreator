@@ -24,7 +24,6 @@ import (
 func NewCreateCommand() *cobra.Command {
 	var inputLang string
 	var outputLangs string
-	var googleSlidesID string
 	var configFile string
 	var noProgress bool
 
@@ -33,20 +32,19 @@ func NewCreateCommand() *cobra.Command {
 		Short: "Create videos with translations",
 		Long:  `Create videos by processing text files, generating translations, audio, and combining with slides.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCreate(inputLang, outputLangs, googleSlidesID, configFile, noProgress)
+			return runCreate(inputLang, outputLangs, configFile, noProgress)
 		},
 	}
 
 	cmd.Flags().StringVarP(&inputLang, "lang", "l", "", "Language of the text input (overrides config file)")
 	cmd.Flags().StringVarP(&outputLangs, "langs-out", "o", "", "Comma-separated list of output languages (overrides config file)")
-	cmd.Flags().StringVar(&googleSlidesID, "google-slides", "", "Google Slides presentation ID (overrides config file)")
 	cmd.Flags().StringVarP(&configFile, "config", "c", "", "Config file path (default: looks for gocreator.yaml in current and parent directories)")
 	cmd.Flags().BoolVar(&noProgress, "no-progress", false, "Disable progress UI")
 
 	return cmd
 }
 
-func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProgress bool) error {
+func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error {
 	// Get working directory
 	rootDir, err := os.Getwd()
 	if err != nil {
@@ -92,10 +90,6 @@ func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProg
 	if outputLangs != "" {
 		cfg.Output.Languages = parseLanguages(outputLangs, cfg.Input.Lang)
 	}
-	if googleSlidesID != "" {
-		cfg.Input.Source = "google-slides"
-		cfg.Input.PresentationID = googleSlidesID
-	}
 
 	// Ensure input language is in output languages
 	if len(cfg.Output.Languages) == 0 {
@@ -136,16 +130,8 @@ func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProg
 	
 	audioService := services.NewAudioService(fs, openaiAdapter, textService, logger)
 	videoService := services.NewVideoService(fs, logger)
-	
-	// Choose slide service based on source
-	var slideService interfaces.SlideLoader
-	if cfg.Input.Source == "google-slides" && cfg.Input.PresentationID != "" {
-		slideService = services.NewGoogleSlidesService(fs, logger)
-		logger.Info("Using Google Slides", "presentationID", cfg.Input.PresentationID)
-	} else {
-		slideService = services.NewSlideService(fs, logger)
-		logger.Info("Using local slides")
-	}
+	slideService := services.NewSlideService(fs, logger)
+	logger.Info("Using local slides")
 
 	// Create video creator
 	creator := services.NewVideoCreator(
@@ -182,7 +168,6 @@ func runCreate(inputLang, outputLangs, googleSlidesID, configFile string, noProg
 		RootDir:          rootDir,
 		InputLang:        cfg.Input.Lang,
 		OutputLangs:      cfg.Output.Languages,
-		GoogleSlidesID:   cfg.Input.PresentationID,
 		ProgressCallback: progressCallback,
 		Transition:       transition,
 		MultiView:        &cfg.MultiView,

@@ -1,418 +1,201 @@
-# GoCreator - Video Creation Tool
+# GoCreator - Local CLI Video Generator
 
 [![CI](https://github.com/Napolitain/gocreator/actions/workflows/ci.yml/badge.svg)](https://github.com/Napolitain/gocreator/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Napolitain/gocreator/branch/main/graph/badge.svg)](https://codecov.io/gh/Napolitain/gocreator)
 [![Go Report Card](https://goreportcard.com/badge/github.com/Napolitain/gocreator)](https://goreportcard.com/report/github.com/Napolitain/gocreator)
 
-A CLI tool for creating videos with translations and audio narration.
+GoCreator turns local slides plus narration text into narrated videos from the command line.
 
-> 📋 **Roadmap**: See our [Roadmap Summary](./ROADMAP_SUMMARY.md) or [Full Improvement Plan](./IMPROVEMENTS_ROADMAP.md) for future features and enhancements.
+## What it does
+
+- Reads narration from `data/texts.txt`
+- Reads slide assets from `data/slides`
+- Supports PNG, JPG, JPEG, PDF, MP4, MOV, AVI, MKV, and WEBM inputs
+- Expands PDFs into one page per slide before rendering
+- Translates narration into multiple output languages
+- Generates text-to-speech audio
+- Renders per-slide video segments and combines them into final outputs
+- Caches translations, audio, video segments, and PDF preprocessing artifacts
+
+## Current workflow
+
+GoCreator is now local-only and CLI-first:
+
+- `gocreator init` creates a starter project layout
+- `gocreator create` runs the full generation pipeline
+- Slides are discovered only from the top level of `data/slides`
+- Slide ordering uses natural filename order (`slide2` comes before `slide10`)
+
+The current media contract is:
+
+- One narration entry is required for every final slide after PDF expansion
+- Image slides and PDF pages use narration duration
+- Video slides use clip duration
+- Video slides mix embedded clip audio with generated narration
+
+## Requirements
+
+- Go 1.24+ if building from source
+- `ffmpeg` and `ffprobe` in `PATH`
+- `OPENAI_API_KEY` set in the environment
+- For PDF input: `pdfinfo`, `pdfseparate`, and `pdftocairo` in `PATH`
+
+PDF support currently relies on those PDF utilities during preprocessing so multi-page PDFs can be split and rendered into slide assets.
 
 ## Installation
 
-### Pre-built Binaries
-
-Download the latest release for your platform from the [Releases page](https://github.com/Napolitain/gocreator/releases).
-
-```bash
-# Linux/macOS
-chmod +x gocreator-*
-sudo mv gocreator-* /usr/local/bin/gocreator
-
-# Verify installation
-gocreator --help
-```
-
-### From Source
+### From source
 
 ```bash
 go install github.com/Napolitain/gocreator/cmd/gocreator@latest
 ```
 
-## Features
-
-- Automated video creation from slides and text
-- **Video input support** - Use video clips as "slides" with their duration, not just static images
-- **Google Slides API integration** - Fetch slides and speaker notes directly from Google Slides
-- **Video transitions** - Smooth transitions between slides (fade, wipe, slide, etc.)
-- Multi-language support with AI-powered translation
-- Text-to-speech audio generation
-- Intelligent caching to reduce API costs
-- Parallel processing for better performance
-
-## Quick Start
-
-**New to GoCreator?** Check out the [examples/](./examples/) directory for a hands-on tutorial:
+### Local build
 
 ```bash
-cd examples/getting-started
+go build -o gocreator.exe ./cmd/gocreator
+```
+
+## Quick start
+
+Initialize a project:
+
+```bash
+gocreator init
+```
+
+This creates:
+
+- `gocreator.yaml`
+- `data/slides/`
+- `data/texts.txt`
+- `data/out/`
+- `data/cache/`
+
+Add your assets:
+
+- Put images, PDFs, and/or video clips in `data/slides/`
+- Edit `data/texts.txt`
+
+Narration entries are separated with a single `-` line:
+
+```text
+Welcome to GoCreator
+-
+This is the second slide
+-
+This is the third slide
+```
+
+Create videos:
+
+```bash
 gocreator create --lang en --langs-out en,fr,es
 ```
 
-See the [Getting Started Example](./examples/getting-started/) for detailed instructions.
+## PDF behavior
 
-## Usage
+- PDFs are discovered alongside images and videos
+- A multi-page PDF is expanded into one final slide per page
+- A single-page PDF still goes through the same preprocessing path
+- Invalid or encrypted PDFs fail the run
+- Expanded PDF artifacts are cached under `data/cache/pdf/`
 
-### Using Local Slides
+If `data/slides` contains:
 
-Create a `data` directory in your project with:
-- `data/slides/` - Directory containing slide images (PNG, JPEG) or video clips (MP4, MOV, AVI, MKV, WEBM)
-- `data/texts.txt` - Text file with slide narrations separated by `-`
-
-```bash
-gocreator create --lang en --langs-out en,fr,es
+```text
+01-cover.png
+02-handout.pdf   # 3 pages
+03-demo.mp4
 ```
 
-**How it works**:
-- **Image slides**: Duration is determined by the TTS audio length
-- **Video slides**: Duration is determined by the video length, with TTS audio aligned at the beginning
-- You can mix images and videos in the same presentation
+then `data/texts.txt` must contain 5 narration entries:
 
-### Using Google Slides
+1. `01-cover.png`
+2. `02-handout.pdf` page 1
+3. `02-handout.pdf` page 2
+4. `02-handout.pdf` page 3
+5. `03-demo.mp4`
 
-GoCreator supports **two authentication methods** for Google Slides API:
+## Commands
 
-**Option A: OAuth 2.0 (Personal Use)**
-1. **Set up Google Cloud Project** and enable Google Slides API
-2. **Create OAuth 2.0 credentials** for desktop app
-3. **Set environment variable**: `export GOOGLE_OAUTH_CREDENTIALS="/path/to/oauth-credentials.json"`
-4. **Run with Google Slides**: `gocreator create --google-slides YOUR_PRESENTATION_ID --lang en --langs-out en,fr,es`
-5. **Authorize on first run**: Follow the prompts to authorize with your Google account
+### `gocreator init`
 
-**Option B: Service Account (CI/CD)**
-1. **Set up Google Cloud Project** and enable Google Slides API
-2. **Create service account credentials** and download JSON file
-3. **Share your presentation** with the service account email
-4. **Set environment variable**: `export GOOGLE_APPLICATION_CREDENTIALS="/path/to/credentials.json"`
-5. **Run with Google Slides**: `gocreator create --google-slides YOUR_PRESENTATION_ID --lang en --langs-out en,fr,es`
+Creates a starter config and project layout in the current directory.
 
-The presentation ID can be found in the Google Slides URL:
-```
-https://docs.google.com/presentation/d/[PRESENTATION_ID]/edit
-```
+### `gocreator create`
 
-**How it works**:
-- Slides are downloaded as images from your Google Slides presentation
-- Speaker notes from each slide are used as the narration text
-- Videos are generated with audio in multiple languages
-- All content is cached for efficient re-generation
-- OAuth 2.0 provides automatic token refresh for seamless access
+Runs the generation pipeline.
 
-📖 **See [GOOGLE_SLIDES_GUIDE.md](GOOGLE_SLIDES_GUIDE.md) for detailed setup instructions and troubleshooting.**
+Common flags:
 
-## Versioning
+- `--lang`, `-l`: input language
+- `--langs-out`, `-o`: comma-separated output languages
+- `--config`, `-c`: config file path
+- `--no-progress`: disable the progress UI
 
-This project uses **Calendar Versioning (CalVer)** with the format `YYYY-MM-DD`.
+## How `create` works
 
-Each release is tagged with the date it was created (e.g., `2025-01-15`). This makes it easy to:
-- Know when a version was released
-- Track the age of your installation
-- Plan upgrades based on release frequency
+1. Load narration from `data/texts.txt`
+2. Load slides from `data/slides`
+3. Expand and cache PDF pages when needed
+4. Translate narration for non-source languages
+5. Generate narration audio
+6. Render one video segment per final slide
+7. Concatenate segments into `data/out/output-<lang>.mp4`
 
-## Architecture
+## Configuration notes
 
-The project follows clean architecture principles with clear separation of concerns:
+The config schema is larger than the currently wired runtime.
 
-### Layers
+The main `create` flow actively uses:
 
-1. **CLI Layer** (`internal/cli/`)
-   - Command-line interface and user interaction
-   - Minimal business logic
-   
-2. **Service Layer** (`internal/services/`)
-   - Business logic and orchestration
-   - VideoCreator orchestrates the entire video creation workflow
-   - Individual services handle specific concerns (text, audio, video, translation)
+- `input.lang`
+- `output.languages`
+- `cache`
+- `transition`
+- `multi_view`
 
-3. **Adapter Layer** (`internal/adapters/`)
-   - External API integrations (OpenAI)
-   - Wraps third-party clients with our interfaces
+Other config sections remain in the schema, but they are not yet part of the core `create` pipeline.
 
-4. **Interface Layer** (`internal/interfaces/`)
-   - Defines contracts between layers
-   - Enables dependency injection and testing
+## Examples
 
-### Dependency Injection
-
-All services follow dependency injection principles:
-
-```go
-// Services receive dependencies through constructors
-textService := services.NewTextService(fs, logger)
-audioService := services.NewAudioService(fs, openaiClient, textService, logger)
-
-// VideoCreator depends on interfaces, not concrete types
-creator := services.NewVideoCreator(
-    fs,
-    textService,    // interfaces.TextProcessor
-    translation,    // interfaces.Translator
-    audioService,   // interfaces.AudioGenerator
-    videoService,   // interfaces.VideoGenerator
-    slideService,   // interfaces.SlideLoader
-    logger,         // interfaces.Logger
-)
-```
-
-This design enables:
-- Easy testing with mocks
-- Swapping implementations without changing code
-- Clear dependency graph
-- Better maintainability
-
-## Testing
-
-The project includes comprehensive unit tests with mocked dependencies:
-
-```bash
-# Run all tests
-go test ./...
-
-# Run tests with coverage
-go test -cover ./...
-
-# Run specific test package
-go test ./internal/services/...
-
-# Run benchmark tests
-go test -bench=. ./internal/services/ -run=^$
-
-# Run benchmarks with memory stats
-go test -bench=. -benchmem ./internal/services/ -run=^$
-```
-
-### Fuzz Testing
-
-GoCreator includes fuzz tests that use Go's built-in fuzzing support (Go 1.18+) to test functions with randomly generated inputs:
-
-```bash
-# Run a specific fuzz test for 30 seconds
-go test -fuzz=FuzzTextService_Hash -fuzztime=30s ./internal/services/
-
-# Run all fuzz tests briefly (10 seconds each)
-go test -fuzz=FuzzTextService_Hash -fuzztime=10s ./internal/services/
-go test -fuzz=FuzzTextService_LoadAndSave -fuzztime=10s ./internal/services/
-go test -fuzz=FuzzTextService_SaveHashes -fuzztime=10s ./internal/services/
-go test -fuzz=FuzzTranslationService_getCacheKey -fuzztime=10s ./internal/services/
-go test -fuzz=FuzzTranslationService_MemoryCache -fuzztime=10s ./internal/services/
-go test -fuzz=FuzzTranslationService_DiskCache -fuzztime=10s ./internal/services/
-
-# Re-run a failing fuzz test case
-go test -run=FuzzTestName/testdata_file_name ./internal/services/
-```
-
-Fuzz tests help discover edge cases and ensure robustness with unexpected inputs. See [FUZZTESTING.md](FUZZTESTING.md) for more details.
-
-
-### Performance Testing
-
-GoCreator includes a comprehensive performance testing tool that measures cache performance, API latency, and provides end-to-end metrics:
-
-```bash
-# Build the performance testing tool
-go build -o perftest ./cmd/perftest/
-
-# Run in simulation mode (no API key needed)
-./perftest
-
-# Run with real OpenAI API (requires OPENAI_API_KEY)
-export OPENAI_API_KEY="your-key"
-./perftest
-```
-
-The tool generates markdown-formatted performance tables showing:
-- Operation timings with and without cache
-- Cache hit rates and counts
-- End-to-end latency measurements
-- Performance improvement factors
-
-See [cmd/perftest/README.md](cmd/perftest/README.md) for detailed documentation.
-
-### Test Coverage
-
-- **TextService**: Load, Save, Hash, and hash file operations
-- **AudioService**: Audio generation with cache validation
-- **TranslationService**: Single and batch translations
-- **CacheService**: Set, Get, Delete, Clear, Expiration
-- **VideoCreator**: Full workflow orchestration with mocked services
-- **Benchmarks**: Performance tests for all core operations with cache scenarios
-- **Fuzz Tests**: Randomized testing for TextService and TranslationService to discover edge cases
-
-All external dependencies (filesystem, OpenAI API) are mocked for isolated unit testing.
-
-## Cache Management
-
-GoCreator implements a sophisticated multi-layered caching strategy:
-
-### Cache Types
-
-1. **Translation Cache** - Saves API costs by caching translations
-2. **Audio Cache** - Reuses generated audio with hash validation
-3. **Video Segment Cache** - Caches intermediate video segments
-4. **In-Memory Cache** - Runtime caching with TTL support
-
-See [CACHE_POLICY.md](CACHE_POLICY.md) for detailed documentation.
-
-### Cache Benefits
-
-- **Cost Reduction**: Avoids redundant OpenAI API calls
-- **Performance**: Reuses expensive computations
-- **Reliability**: Works offline for previously processed content
-- **Debugging**: Easier to inspect cached intermediate results
-
-## Video Transitions
-
-GoCreator supports smooth transitions between slides to create professional-looking videos. Configure transitions in your `gocreator.yaml` file:
-
-```yaml
-transition:
-  type: fade      # Options: none, fade, wipe, slide, etc.
-  duration: 0.5   # Duration in seconds (0.0 to 5.0)
-```
-
-**Available transition types**: `none`, `fade`, `dissolve`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `slideleft`, `slideright`, `slideup`, `slidedown`
-
-See [TRANSITIONS.md](TRANSITIONS.md) for detailed documentation on transitions, including:
-- Complete list of available effects
-- Best practices for different content types
-- Technical details and troubleshooting
-- Advanced usage examples
+- `examples/getting-started/` - minimal local workflow
+- `examples/demo/` - end-to-end CLI example
+- `examples/demo-multiview/` - multi-view example
+- `examples/*.yaml` - config schema examples
 
 ## Development
 
-### Project Structure
+Common commands:
 
-```
-gocreator/
-├── cmd/
-│   └── gocreator/          # Main entry point
-├── internal/
-│   ├── adapters/           # External API adapters
-│   ├── cli/                # CLI commands
-│   ├── interfaces/         # Interface definitions
-│   ├── mocks/             # Mock implementations for testing
-│   └── services/          # Business logic
-│       ├── audio.go       # Audio generation
-│       ├── cache.go       # Cache management
-│       ├── creator.go     # Main orchestrator
-│       ├── slide.go       # Slide loading
-│       ├── text.go        # Text processing
-│       ├── translation.go # Translation service
-│       ├── video.go       # Video generation
-│       └── *_test.go      # Unit tests
-├── CACHE_POLICY.md        # Cache strategy documentation
-└── go.mod
+```bash
+go mod tidy
+go fmt ./...
+go vet ./...
+go test ./...
+go build -o gocreator.exe ./cmd/gocreator
+go build -o perftest.exe ./cmd/perftest
+go build -o cache-perf-test.exe ./cmd/cache-perf-test
 ```
 
-### Adding New Features
+## Architecture
 
-To add a new service:
+The main runtime path is:
 
-1. Define the interface in `internal/interfaces/interfaces.go`
-2. Implement the service in `internal/services/`
-3. Create mock in `internal/mocks/` for testing
-4. Write comprehensive unit tests
-5. Update VideoCreator to use the new service
-
-Example:
-```go
-// 1. Define interface
-type SubtitleGenerator interface {
-    Generate(ctx context.Context, texts []string, outputPath string) error
-}
-
-// 2. Implement service
-type SubtitleService struct {
-    fs     afero.Fs
-    logger interfaces.Logger
-}
-
-func NewSubtitleService(fs afero.Fs, logger interfaces.Logger) *SubtitleService {
-    return &SubtitleService{fs: fs, logger: logger}
-}
-
-// 3. Create mock (in internal/mocks/)
-type MockSubtitleGenerator struct {
-    mock.Mock
-}
-
-// 4. Write tests
-func TestSubtitleService_Generate(t *testing.T) {
-    // ...
-}
+```text
+cmd/gocreator -> internal/cli/create.go -> internal/services/creator.go
 ```
 
-## Dependencies
+Core services handle:
 
-- **github.com/spf13/cobra** - CLI framework
-- **github.com/spf13/afero** - Filesystem abstraction (enables easy testing)
-- **github.com/openai/openai-go** - OpenAI API client
-- **github.com/patrickmn/go-cache** - In-memory cache with expiration
-- **github.com/stretchr/testify** - Testing framework with mocking support
-
-## Best Practices
-
-### Code Quality
-
-1. **Interfaces over Concrete Types**: Services depend on interfaces for flexibility
-2. **Dependency Injection**: All dependencies passed through constructors
-3. **Single Responsibility**: Each service has one clear purpose
-4. **Comprehensive Testing**: Mock external dependencies for unit tests
-5. **Error Handling**: Clear error messages with context
-
-### Testing Strategy
-
-1. **Unit Tests**: Test each service in isolation with mocks
-2. **Table-Driven Tests**: Use test tables for multiple scenarios
-3. **Mock External APIs**: Never call real APIs in unit tests
-4. **Test Edge Cases**: Empty inputs, errors, concurrent operations
-
-### Caching Strategy
-
-1. **Hash-Based Validation**: Use content hashes to detect changes
-2. **Layered Caching**: Multiple cache levels for different concerns
-3. **Cache Invalidation**: Automatic invalidation on content changes
-4. **Documented Policy**: Clear documentation of cache behavior
-
-## Future Improvements
-
-> **📋 Full Roadmap**: See [IMPROVEMENTS_ROADMAP.md](./IMPROVEMENTS_ROADMAP.md) for a comprehensive improvement plan covering usability, features, platforms, and technical enhancements.
-
-Key areas for future development:
-
-### High Priority
-1. **Subtitle Support**: Automatic subtitle generation in multiple formats (SRT, VTT)
-2. **Configuration Files**: YAML/JSON config for easier project management
-3. **Multiple Voice Options**: Choose from different TTS voices and providers
-4. **Better Error Messages**: User-friendly errors with actionable solutions
-5. **Progress Indicators**: Rich progress bars and status updates
-
-### Medium Priority
-6. **PowerPoint Support**: Direct .pptx file support
-7. **Resume Support**: Resume interrupted video creation jobs
-8. **Quality Profiles**: Preset quality configurations (low, medium, high, ultra)
-9. **Dry Run Mode**: Preview costs and outputs before processing
-10. **Alternative TTS Providers**: Support for Google, AWS, Azure, ElevenLabs
-
-### Also Planned
-- Background music support
-- Video transitions and effects
-- YouTube/social media integration
-- Batch processing
-- Plugin system for extensibility
-- API and webhooks
-- Advanced caching strategies
-
-## Contributing
-
-When contributing:
-
-1. Follow existing code structure and patterns
-2. Add unit tests for all new code
-3. Update documentation for user-facing changes
-4. Keep functions small and focused
-5. Use meaningful variable and function names
-6. Add comments for complex logic only
+- text loading
+- translation
+- audio generation
+- slide discovery and PDF preprocessing
+- video assembly
+- transitions and multi-view layout composition
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
+GPL-3.0

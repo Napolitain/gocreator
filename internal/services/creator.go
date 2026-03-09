@@ -17,7 +17,6 @@ type VideoCreatorConfig struct {
 	RootDir          string
 	InputLang        string
 	OutputLangs      []string
-	GoogleSlidesID   string // Google Slides presentation ID (found in the URL). When empty, uses local slides; when provided, fetches from Google Slides API
 	ProgressCallback interfaces.ProgressCallback
 	Transition       TransitionConfig      // Transition configuration for slide transitions
 	MultiView        *config.MultiViewConfig // Multi-view configuration for split-screen layouts
@@ -92,51 +91,29 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 	// Loading stage
 	progress.OnStageStart("Loading")
 
-	// Check if using Google Slides
-	if cfg.GoogleSlidesID != "" {
-		progress.OnStageProgress("Loading", 30, "Fetching from Google Slides")
-		
-		// Fetch slides and notes from Google Slides
-		slidesDir := filepath.Join(dataDir, "slides")
-		slides, inputTexts, err = vc.slideService.LoadFromGoogleSlides(ctx, cfg.GoogleSlidesID, slidesDir)
-		if err != nil {
-			progress.OnStageComplete("Loading", false, fmt.Sprintf("Failed: %v", err))
-			return fmt.Errorf("failed to load Google Slides: %w", err)
-		}
-		vc.logger.Info("Loaded from Google Slides", "slideCount", len(slides), "noteCount", len(inputTexts))
+	progress.OnStageProgress("Loading", 20, "Loading local files")
 
-		// Save the fetched notes as input texts for caching
-		textsPath := filepath.Join(dataDir, "texts.txt")
-		if err := vc.textService.Save(ctx, textsPath, inputTexts); err != nil {
-			// Saving fetched notes is only for caching purposes. It's acceptable to continue without saving,
-			// for example, if running on a read-only filesystem or if caching is not critical for correctness.
-			vc.logger.Warn("Failed to save fetched notes", "error", err)
-		}
-	} else {
-		progress.OnStageProgress("Loading", 20, "Loading local files")
-		
-		// Load input texts from file
-		textsPath := filepath.Join(dataDir, "texts.txt")
-		inputTexts, err = vc.textService.Load(ctx, textsPath)
-		if err != nil {
-			progress.OnStageComplete("Loading", false, fmt.Sprintf("Failed: %v", err))
-			return fmt.Errorf("failed to load input texts: %w", err)
-		}
-
-		vc.logger.Info("Loaded texts", "count", len(inputTexts))
-
-		progress.OnStageProgress("Loading", 60, "Loading slides")
-		
-		// Load slides from directory
-		slidesDir := filepath.Join(dataDir, "slides")
-		slides, err = vc.slideService.LoadSlides(ctx, slidesDir)
-		if err != nil {
-			progress.OnStageComplete("Loading", false, fmt.Sprintf("Failed: %v", err))
-			return fmt.Errorf("failed to load slides: %w", err)
-		}
-
-		vc.logger.Info("Loaded slides", "count", len(slides))
+	// Load input texts from file
+	textsPath := filepath.Join(dataDir, "texts.txt")
+	inputTexts, err = vc.textService.Load(ctx, textsPath)
+	if err != nil {
+		progress.OnStageComplete("Loading", false, fmt.Sprintf("Failed: %v", err))
+		return fmt.Errorf("failed to load input texts: %w", err)
 	}
+
+	vc.logger.Info("Loaded texts", "count", len(inputTexts))
+
+	progress.OnStageProgress("Loading", 60, "Loading slides")
+
+	// Load slides from directory
+	slidesDir := filepath.Join(dataDir, "slides")
+	slides, err = vc.slideService.LoadSlides(ctx, slidesDir)
+	if err != nil {
+		progress.OnStageComplete("Loading", false, fmt.Sprintf("Failed: %v", err))
+		return fmt.Errorf("failed to load slides: %w", err)
+	}
+
+	vc.logger.Info("Loaded slides", "count", len(slides))
 
 	if len(slides) != len(inputTexts) {
 		progress.OnStageComplete("Loading", false, "Slide/text count mismatch")

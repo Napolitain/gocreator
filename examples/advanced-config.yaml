@@ -1,10 +1,9 @@
-# Advanced GoCreator Configuration
-# This example demonstrates all available video editing features
+# Advanced GoCreator configuration schema example
+# The create command currently runs against local assets in data/slides.
+# Fields outside the active create pipeline remain here as schema examples.
 
 input:
   lang: en
-  source: local
-  # presentation_id: "YOUR_GOOGLE_SLIDES_ID"  # For Google Slides source
 
 output:
   languages:

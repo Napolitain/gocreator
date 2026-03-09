@@ -38,10 +38,9 @@ type TextProcessor interface {
 	Hash(text string) string
 }
 
-// SlideLoader loads slide images from a directory or Google Slides
+// SlideLoader loads slide assets from a local directory
 type SlideLoader interface {
 	LoadSlides(ctx context.Context, dir string) ([]string, error)
-	LoadFromGoogleSlides(ctx context.Context, presentationID, outputDir string) (slides []string, notes []string, err error)
 }
 
 // CacheService manages caching operations
