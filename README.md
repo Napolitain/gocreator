@@ -196,9 +196,9 @@ Other config sections remain in the schema, but they are not yet part of the cor
 - `examples/video-prerecorded/` - single video plus prerecorded `.wav` sidecar (no API key)
 - `examples/video-align-to-audio/` - video plus longer prerecorded audio using `timing.media_alignment: slide`
 - `examples/language-overrides/` - mixed per-language `.txt` and prerecorded audio sidecars
-- `examples/getting-started/` - older minimal local workflow
-- `examples/demo/` - end-to-end CLI example
-- `examples/demo-multiview/` - multi-view example
+- `examples/getting-started/` - five-slide starter project with matching `.txt` sidecars (requires API key)
+- `examples/demo/` - two-slide multi-language CLI example with inferred sidecars (requires API key)
+- `examples/demo-multiview/` - multi-view example with per-slide `.txt` sidecars (requires API key)
 - `examples/*.yaml` - config schema examples
 
 ## Development

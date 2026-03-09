@@ -1,0 +1,1 @@
+Now we switch to picture-in-picture mode with a corner overlay.

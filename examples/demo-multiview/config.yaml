@@ -6,11 +6,6 @@ input:
 
 output:
   languages: [en]
-  directory: ./data/out
-  formats:
-    - type: mp4
-      resolution: 1920x1080
-      quality: high
 
 # Multi-view demonstration
 multi_view:
@@ -52,23 +47,6 @@ multi_view:
         - data/videos/person4.mp4
       gap: 6
 
-# Simple encoding settings
-encoding:
-  video:
-    codec: libx264
-    preset: fast
-    crf: 23
-    fps: 30
-  audio:
-    codec: aac
-    bitrate: 128k
-
 # No transitions for simplicity
 transition:
   type: none
-
-# Cache for faster re-runs
-cache:
-  enabled: true
-  directory: ./cache
-  ttl: 24h

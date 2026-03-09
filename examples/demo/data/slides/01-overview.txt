@@ -1,0 +1,1 @@
+GoCreator is an automated video creation tool built as a command-line application. It transforms slides and text into professional presentation videos with multi-language support and AI-powered narration.

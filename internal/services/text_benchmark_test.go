@@ -8,15 +8,15 @@ import (
 	"github.com/spf13/afero"
 )
 
-// Benchmark text loading
+// Benchmark sidecar text loading
 func BenchmarkTextService_Load(b *testing.B) {
 	fs := afero.NewMemMapFs()
 	logger := &mockLogger{}
 	service := NewTextService(fs, logger)
 
 	// Create test file
-	testPath := "/test/texts.txt"
-	testContent := "First text\n-\nSecond text\n-\nThird text\n-\nFourth text\n-\nFifth text"
+	testPath := "/test/slide1.txt"
+	testContent := "Narration for slide 1"
 	_ = fs.MkdirAll("/test", 0755)
 	_ = afero.WriteFile(fs, testPath, []byte(testContent), 0644)
 
@@ -28,25 +28,21 @@ func BenchmarkTextService_Load(b *testing.B) {
 	}
 }
 
-// Benchmark text saving
+// Benchmark sidecar text saving
 func BenchmarkTextService_Save(b *testing.B) {
 	fs := afero.NewMemMapFs()
 	logger := &mockLogger{}
 	service := NewTextService(fs, logger)
 
 	texts := []string{
-		"First text for saving",
-		"Second text for saving",
-		"Third text for saving",
-		"Fourth text for saving",
-		"Fifth text for saving",
+		"Narration for slide 1",
 	}
 	_ = fs.MkdirAll("/test", 0755)
 	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testPath := fmt.Sprintf("/test/texts_%d.txt", i)
+		testPath := fmt.Sprintf("/test/slide_%d.txt", i)
 		_ = service.Save(ctx, testPath, texts)
 	}
 }
@@ -114,15 +110,15 @@ func BenchmarkTextService_SaveHashes(b *testing.B) {
 	}
 }
 
-// Benchmark hash of loaded text (single text hashing workflow)
+// Benchmark hash of loaded sidecar text
 func BenchmarkTextService_LoadAndHash(b *testing.B) {
 	fs := afero.NewMemMapFs()
 	logger := &mockLogger{}
 	service := NewTextService(fs, logger)
 
 	// Create test file with a single text entry
-	testPath := "/test/file.txt"
-	testContent := "This is test content for file hashing benchmark"
+	testPath := "/test/slide1.txt"
+	testContent := "This is test content for slide sidecar hashing benchmark"
 	_ = fs.MkdirAll("/test", 0755)
 	_ = afero.WriteFile(fs, testPath, []byte(testContent), 0644)
 

@@ -1,0 +1,1 @@
+The challenge with creating presentation videos manually is that it is time-consuming, translating content into multiple languages is expensive, and regenerating videos after small changes wastes significant resources and money.

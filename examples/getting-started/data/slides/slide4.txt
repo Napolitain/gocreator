@@ -1,0 +1,1 @@
+Getting started with GoCreator is simple. First, create a data directory with your slides and text. Then, run the gocreator create command with your desired languages. The tool will handle everything else, from translations to audio generation to video assembly.

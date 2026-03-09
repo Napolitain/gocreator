@@ -1,0 +1,1 @@
+GoCreator is a command-line tool written in Go that transforms your slides and text into engaging videos. It supports multiple languages and uses AI to generate translations and natural-sounding speech.

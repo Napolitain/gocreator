@@ -1,0 +1,1 @@
+GoCreator offers several powerful features. It provides automated video creation from slides and text. It supports multi-language translation powered by AI. It includes text-to-speech audio generation. And it uses intelligent caching to reduce API costs and improve performance.

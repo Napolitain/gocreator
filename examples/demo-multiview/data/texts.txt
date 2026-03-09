@@ -1,4 +1,0 @@
-Welcome to the multi-view demo! This shows split-screen capabilities.
-This is slide one with horizontal split screen layout.
-Now we switch to picture-in-picture mode with a corner overlay.
-Finally, we demonstrate a two-by-two grid layout for meetings.

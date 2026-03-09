@@ -37,7 +37,7 @@ func NewMockOpenAIClient(translationDelay, ttsDelay time.Duration) *MockOpenAICl
 func (m *MockOpenAIClient) ChatCompletion(ctx context.Context, messages []openai.ChatCompletionMessageParamUnion) (string, error) {
 	m.CallCount.Translation++
 	time.Sleep(m.TranslationDelay)
-	
+
 	// Extract text from messages and return a mock translation
 	return "Mock translation", nil
 }
@@ -45,7 +45,7 @@ func (m *MockOpenAIClient) ChatCompletion(ctx context.Context, messages []openai
 func (m *MockOpenAIClient) GenerateSpeech(ctx context.Context, text string) (io.ReadCloser, error) {
 	m.CallCount.TTS++
 	time.Sleep(m.TTSDelay)
-	
+
 	// Return mock audio data
 	mockAudio := strings.Repeat("audio-data-", 100) // ~1KB of mock audio
 	return io.NopCloser(strings.NewReader(mockAudio)), nil
@@ -85,7 +85,7 @@ func (l *CacheTrackingLogger) With(args ...any) interfaces.Logger {
 
 func (l *CacheTrackingLogger) trackCache(msg string) {
 	msgLower := strings.ToLower(msg)
-	
+
 	if strings.Contains(msgLower, "using cached video segment") {
 		l.SegmentCacheHits++
 	} else if strings.Contains(msgLower, "using cached final video") {
@@ -95,7 +95,7 @@ func (l *CacheTrackingLogger) trackCache(msg string) {
 	} else if strings.Contains(msgLower, "using cached audio") {
 		l.AudioCacheHits++
 	}
-	
+
 	// Track misses (these would be in debug logs)
 	if strings.Contains(msgLower, "generating") || strings.Contains(msgLower, "translating") {
 		if strings.Contains(msgLower, "segment") {
@@ -135,7 +135,7 @@ type PerformanceMetrics struct {
 func main() {
 	fmt.Println("=== GoCreator Cache Performance Testing Tool ===")
 	fmt.Println()
-	
+
 	scenarios := []Scenario{
 		{
 			Name:              "Small Project (3 slides, 2 languages)",
@@ -159,59 +159,58 @@ func main() {
 			RunCount:          3,
 		},
 	}
-	
+
 	allMetrics := []PerformanceMetrics{}
-	
+
 	for _, scenario := range scenarios {
 		fmt.Printf("\n### Testing Scenario: %s ###\n", scenario.Name)
 		metrics := runScenario(scenario)
 		allMetrics = append(allMetrics, metrics...)
 	}
-	
+
 	printSummary(allMetrics)
 }
 
 func runScenario(scenario Scenario) []PerformanceMetrics {
 	metrics := []PerformanceMetrics{}
-	
+
 	// Create temporary directory for this scenario
-	baseDir := filepath.Join("/tmp", "cache-perf-test", strings.ReplaceAll(scenario.Name, " ", "-"))
-	
+	baseDir := filepath.Join(os.TempDir(), "cache-perf-test", strings.ReplaceAll(scenario.Name, " ", "-"))
+
 	for run := 1; run <= scenario.RunCount; run++ {
 		fmt.Printf("\n  Run %d/%d...\n", run, scenario.RunCount)
-		
+
 		// Setup
 		fs := afero.NewOsFs()
 		logger := &CacheTrackingLogger{}
 		mockClient := NewMockOpenAIClient(50*time.Millisecond, 50*time.Millisecond)
-		
+
 		// Create data directory structure
 		dataDir := filepath.Join(baseDir, "data")
 		slidesDir := filepath.Join(dataDir, "slides")
-		textsPath := filepath.Join(dataDir, "texts.txt")
-		
+
 		if run == 1 {
 			// Clean up before first run
 			if err := os.RemoveAll(baseDir); err != nil {
 				log.Printf("Warning: failed to remove base dir: %v", err)
 			}
 		}
-		
+
 		// Create directories
 		if err := os.MkdirAll(slidesDir, 0755); err != nil {
 			log.Fatalf("Failed to create slides directory: %v", err)
 		}
-		
-		// Generate mock slides and texts
-		setupMockData(fs, slidesDir, textsPath, scenario.NumSlides)
-		
+
+		// Generate mock slides and matching sidecar texts
+		setupMockData(fs, slidesDir, scenario.NumSlides)
+
 		// Create services
 		textService := services.NewTextService(fs, logger)
 		translationService := services.NewTranslationServiceWithCache(mockClient, logger, fs, filepath.Join(dataDir, "cache", "translations"))
 		audioService := services.NewAudioService(fs, mockClient, textService, logger)
 		videoService := services.NewVideoService(fs, logger)
 		slideService := services.NewSlideService(fs, logger)
-		
+
 		// Configure transitions
 		if scenario.TransitionEnabled {
 			videoService.SetTransition(services.TransitionConfig{
@@ -219,7 +218,7 @@ func runScenario(scenario Scenario) []PerformanceMetrics {
 				Duration: 0.5,
 			})
 		}
-		
+
 		// Create video creator
 		creator := services.NewVideoCreator(
 			fs,
@@ -230,25 +229,25 @@ func runScenario(scenario Scenario) []PerformanceMetrics {
 			slideService,
 			logger,
 		)
-		
-		// Load input texts
-		inputTexts, err := textService.Load(context.Background(), textsPath)
-		if err != nil {
-			log.Fatalf("Failed to load texts: %v", err)
-		}
-		
+
 		// Load slides
 		slides, err := slideService.LoadSlides(context.Background(), slidesDir)
 		if err != nil {
 			log.Fatalf("Failed to load slides: %v", err)
 		}
-		
+
+		// Load source narration from per-slide sidecars
+		inputTexts, err := loadSlideTexts(context.Background(), textService, slides)
+		if err != nil {
+			log.Fatalf("Failed to load sidecar texts: %v", err)
+		}
+
 		// Generate languages
 		languages := generateLanguages(scenario.NumLanguages)
-		
+
 		// Record start time
 		startTime := time.Now()
-		
+
 		// Process each language
 		for _, lang := range languages {
 			cfg := services.VideoCreatorConfig{
@@ -260,35 +259,27 @@ func runScenario(scenario Scenario) []PerformanceMetrics {
 					Duration: 0.5,
 				},
 			}
-			
+
 			// Process language (simplified - just the core operations)
 			ctx := context.Background()
 			cacheDir := filepath.Join(dataDir, "cache", lang)
-			textDir := filepath.Join(cacheDir, "text")
 			audioDir := filepath.Join(cacheDir, "audio")
-			
+
 			// Translate if needed
 			var texts []string
 			if lang == cfg.InputLang {
 				texts = inputTexts
 			} else {
-				textsPath := filepath.Join(textDir, "texts.txt")
-				exists, _ := afero.Exists(fs, textsPath)
-				
-				if exists {
-					texts, _ = textService.Load(ctx, textsPath)
-					logger.Info("Loading cached translation")
-				} else {
-					texts, _ = translationService.TranslateBatch(ctx, inputTexts, lang)
-					if err := textService.Save(ctx, textsPath, texts); err != nil {
-						log.Printf("Warning: failed to save texts: %v", err)
-					}
+				texts, err = translationService.TranslateBatch(ctx, inputTexts, lang)
+				if err != nil {
+					log.Printf("Warning: failed to translate texts for %s: %v", lang, err)
+					continue
 				}
 			}
-			
+
 			// Generate audio
 			audioPaths, _ := audioService.GenerateBatch(ctx, texts, audioDir)
-			
+
 			// Generate video
 			outputDir := filepath.Join(dataDir, "out")
 			outputPath := filepath.Join(outputDir, fmt.Sprintf("output-%s.mp4", lang))
@@ -296,25 +287,25 @@ func runScenario(scenario Scenario) []PerformanceMetrics {
 				log.Printf("Warning: failed to generate video: %v", err)
 			}
 		}
-		
+
 		duration := time.Since(startTime)
-		
+
 		// Calculate cache hit rate
 		totalOps := logger.SegmentCacheHits + logger.SegmentCacheMisses +
 			logger.FinalCacheHits + logger.FinalCacheMisses +
 			logger.TranslationCacheHits + logger.TranslationCacheMisses +
 			logger.AudioCacheHits + logger.AudioCacheMisses
-		
+
 		cacheHits := logger.SegmentCacheHits + logger.FinalCacheHits +
 			logger.TranslationCacheHits + logger.AudioCacheHits
-		
+
 		cacheHitRate := 0.0
 		if totalOps > 0 {
 			cacheHitRate = float64(cacheHits) / float64(totalOps) * 100
 		}
-		
+
 		totalAPICalls := mockClient.CallCount.Translation + mockClient.CallCount.TTS
-		
+
 		metric := PerformanceMetrics{
 			Scenario:             scenario.Name,
 			Run:                  run,
@@ -328,24 +319,24 @@ func runScenario(scenario Scenario) []PerformanceMetrics {
 			TotalAPICalls:        totalAPICalls,
 			CacheHitRate:         cacheHitRate,
 		}
-		
+
 		metrics = append(metrics, metric)
-		
+
 		fmt.Printf("    Duration: %v\n", duration)
 		fmt.Printf("    Cache Hit Rate: %.1f%%\n", cacheHitRate)
 		fmt.Printf("    API Calls (Translation): %d\n", mockClient.CallCount.Translation)
 		fmt.Printf("    API Calls (TTS): %d\n", mockClient.CallCount.TTS)
 		fmt.Printf("    Segment Cache Hits: %d\n", logger.SegmentCacheHits)
 		fmt.Printf("    Final Cache Hits: %d\n", logger.FinalCacheHits)
-		
+
 		// Prevent creator from being optimized away
 		_ = creator
 	}
-	
+
 	return metrics
 }
 
-func setupMockData(fs afero.Fs, slidesDir, textsPath string, numSlides int) {
+func setupMockData(fs afero.Fs, slidesDir string, numSlides int) {
 	// Create mock slide images
 	for i := 0; i < numSlides; i++ {
 		slidePath := filepath.Join(slidesDir, fmt.Sprintf("slide_%d.png", i))
@@ -353,35 +344,35 @@ func setupMockData(fs afero.Fs, slidesDir, textsPath string, numSlides int) {
 		if err := afero.WriteFile(fs, slidePath, []byte(mockImageData), 0644); err != nil {
 			log.Printf("Warning: failed to write slide: %v", err)
 		}
-	}
-	
-	// Create mock texts
-	texts := []string{}
-	for i := 0; i < numSlides; i++ {
-		texts = append(texts, fmt.Sprintf("This is the narration for slide %d. It contains important information.", i))
-	}
-	
-	file, err := fs.Create(textsPath)
-	if err != nil {
-		log.Printf("Warning: failed to create texts file: %v", err)
-		return
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Printf("Warning: failed to close texts file: %v", err)
-		}
-	}()
-	
-	for i, text := range texts {
-		if _, err := file.WriteString(text); err != nil {
-			log.Printf("Warning: failed to write text: %v", err)
-		}
-		if i < len(texts)-1 {
-			if _, err := file.WriteString("\n-\n"); err != nil {
-				log.Printf("Warning: failed to write delimiter: %v", err)
-			}
+
+		textPath := filepath.Join(slidesDir, fmt.Sprintf("slide_%d.txt", i))
+		text := fmt.Sprintf("This is the narration for slide %d. It contains important information.", i)
+		if err := afero.WriteFile(fs, textPath, []byte(text), 0644); err != nil {
+			log.Printf("Warning: failed to write sidecar text: %v", err)
 		}
 	}
+}
+
+func loadSlideTexts(ctx context.Context, textService *services.TextService, slides []string) ([]string, error) {
+	texts := make([]string, 0, len(slides))
+	for _, slidePath := range slides {
+		sidecarPath := filepath.Join(
+			filepath.Dir(slidePath),
+			strings.TrimSuffix(filepath.Base(slidePath), filepath.Ext(slidePath))+".txt",
+		)
+
+		entries, err := textService.Load(ctx, sidecarPath)
+		if err != nil {
+			return nil, fmt.Errorf("load %s: %w", sidecarPath, err)
+		}
+		if len(entries) == 0 {
+			return nil, fmt.Errorf("sidecar %s is empty", sidecarPath)
+		}
+
+		texts = append(texts, entries[0])
+	}
+
+	return texts, nil
 }
 
 func generateLanguages(count int) []string {
@@ -397,26 +388,26 @@ func printSummary(metrics []PerformanceMetrics) {
 	fmt.Println()
 	fmt.Println("=== Performance Summary ===")
 	fmt.Println()
-	
+
 	// Group by scenario
 	scenarioMap := make(map[string][]PerformanceMetrics)
 	for _, m := range metrics {
 		scenarioMap[m.Scenario] = append(scenarioMap[m.Scenario], m)
 	}
-	
+
 	for scenario, runs := range scenarioMap {
 		fmt.Printf("### %s ###\n", scenario)
-		
+
 		firstRun := runs[0]
 		lastRun := runs[len(runs)-1]
-		
+
 		speedup := float64(firstRun.Duration) / float64(lastRun.Duration)
 		apiSavings := firstRun.TotalAPICalls - lastRun.TotalAPICalls
 		apiSavingsPercent := 0.0
 		if firstRun.TotalAPICalls > 0 {
 			apiSavingsPercent = float64(apiSavings) / float64(firstRun.TotalAPICalls) * 100
 		}
-		
+
 		fmt.Printf("  First Run:  %v (%.0f%% cache hits, %d API calls)\n",
 			firstRun.Duration, firstRun.CacheHitRate, firstRun.TotalAPICalls)
 		fmt.Printf("  Last Run:   %v (%.0f%% cache hits, %d API calls)\n",
@@ -425,7 +416,7 @@ func printSummary(metrics []PerformanceMetrics) {
 		fmt.Printf("  API Savings: %d calls (%.0f%% reduction)\n\n",
 			apiSavings, apiSavingsPercent)
 	}
-	
+
 	fmt.Println("=== Key Insights ===")
 	fmt.Println("- First run: No cache, all operations performed")
 	fmt.Println("- Subsequent runs: Cache utilized, significant speedup")
