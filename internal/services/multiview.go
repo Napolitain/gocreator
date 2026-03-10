@@ -330,7 +330,7 @@ func (s *MultiViewService) buildCustom(layout config.LayoutConfig, w, h int) (st
 	overlayFilter := "[0:v]"
 	for i, video := range videos {
 		if i == 0 {
-			overlayFilter = fmt.Sprintf("[cv0]")
+			overlayFilter = "[cv0]"
 		} else {
 			x, y := video.Position[0], video.Position[1]
 			overlayFilter = fmt.Sprintf("%s[cv%d]overlay=%d:%d", overlayFilter, i, x, y)

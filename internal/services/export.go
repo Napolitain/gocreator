@@ -122,7 +122,9 @@ func (s *ExportService) exportToGIF(ctx context.Context, inputPath, outputPath s
 	// Two-step process for optimized GIF
 	// Step 1: Generate palette
 	paletteFile := outputPath + ".palette.png"
-	defer s.fs.Remove(paletteFile)
+	defer func() {
+		_ = s.fs.Remove(paletteFile) // Ignore error on cleanup
+	}()
 
 	paletteArgs := []string{
 		"-y",

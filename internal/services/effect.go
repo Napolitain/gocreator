@@ -72,8 +72,8 @@ func (s *EffectService) BuildKenBurnsFilter(cfg config.EffectConfig, duration fl
 	direction := cfg.Config.Direction
 	if direction == "random" {
 		directions := []string{"left", "right", "up", "down", "center"}
-		rand.Seed(time.Now().UnixNano())
-		direction = directions[rand.Intn(len(directions))]
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		direction = directions[rng.Intn(len(directions))]
 	}
 
 	// Calculate pan expressions

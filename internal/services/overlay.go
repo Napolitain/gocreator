@@ -64,7 +64,7 @@ func (s *OverlayService) BuildTextOverlayFilter(cfg config.EffectConfig) string 
 		if cfg.Config.BackgroundColor != "" {
 			parts = append(parts, fmt.Sprintf("boxcolor=%s", cfg.Config.BackgroundColor))
 		}
-		parts = append(parts, fmt.Sprintf("boxborderw=5"))
+		parts = append(parts, "boxborderw=5")
 	}
 
 	// Position
