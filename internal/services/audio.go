@@ -19,6 +19,7 @@ type AudioService struct {
 	client      interfaces.OpenAIClient
 	textService *TextService
 	logger      interfaces.Logger
+	speech      interfaces.SpeechOptions
 }
 
 // NewAudioService creates a new audio service
@@ -29,6 +30,13 @@ func NewAudioService(fs afero.Fs, client interfaces.OpenAIClient, textService *T
 		textService: textService,
 		logger:      logger,
 	}
+}
+
+// WithSpeechOptions returns a shallow copy configured for a specific speech profile.
+func (s *AudioService) WithSpeechOptions(options interfaces.SpeechOptions) *AudioService {
+	clone := *s
+	clone.speech = options
+	return &clone
 }
 
 // Generate generates audio from text
@@ -44,7 +52,7 @@ func (s *AudioService) Generate(ctx context.Context, text, outputPath string) er
 	}
 
 	// Generate audio
-	body, err := s.client.GenerateSpeech(ctx, text)
+	body, err := s.generateSpeech(ctx, text)
 	if err != nil {
 		return fmt.Errorf("failed to generate speech: %w", err)
 	}
@@ -68,7 +76,7 @@ func (s *AudioService) Generate(ctx context.Context, text, outputPath string) er
 	}
 
 	// Save hash for cache validation
-	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
+	hash := s.computeSpeechHash(text)
 	hashPath := outputPath + ".hash"
 	if err := afero.WriteFile(s.fs, hashPath, []byte(hash), 0644); err != nil {
 		return fmt.Errorf("failed to write hash file: %w", err)
@@ -86,7 +94,7 @@ func (s *AudioService) GenerateBatch(ctx context.Context, texts []string, output
 	// Compute hashes and load cached hashes
 	hashes := make([]string, len(texts))
 	for i, text := range texts {
-		hashes[i] = s.textService.Hash(text)
+		hashes[i] = s.computeSpeechHash(text)
 	}
 
 	hashFile := filepath.Join(outputDir, "hashes")
@@ -166,6 +174,28 @@ func (s *AudioService) checkCache(ctx context.Context, text, outputPath string) 
 	}
 
 	// Compute current hash
-	currentHash := fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
+	currentHash := s.computeSpeechHash(text)
 	return string(data) == currentHash, nil
+}
+
+func (s *AudioService) generateSpeech(ctx context.Context, text string) (io.ReadCloser, error) {
+	if !isZeroSpeechOptions(s.speech) {
+		if client, ok := s.client.(interfaces.SpeechSynthesisClient); ok {
+			return client.GenerateSpeechWithOptions(ctx, text, s.speech)
+		}
+	}
+	return s.client.GenerateSpeech(ctx, text)
+}
+
+func isZeroSpeechOptions(options interfaces.SpeechOptions) bool {
+	return options.Model == "" && options.Voice == "" && options.Speed == 0
+}
+
+func (s *AudioService) computeSpeechHash(text string) string {
+	if isZeroSpeechOptions(s.speech) {
+		return fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
+	}
+
+	payload := fmt.Sprintf("%s|%s|%.3f|%s", s.speech.Model, s.speech.Voice, s.speech.Speed, text)
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(payload)))
 }

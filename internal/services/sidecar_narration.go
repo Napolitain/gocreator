@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"gocreator/internal/interfaces"
+
 	"github.com/spf13/afero"
 )
 
@@ -80,6 +82,7 @@ func (vc *VideoCreator) resolveTextsForLanguage(
 
 func (vc *VideoCreator) resolveAudioForLanguage(
 	ctx context.Context,
+	audioGenerator interfaces.AudioGenerator,
 	inputLang string,
 	lang string,
 	slidesDir string,
@@ -134,7 +137,7 @@ func (vc *VideoCreator) resolveAudioForLanguage(
 		wg.Add(1)
 		go func(jobIndex int, current ttsJob) {
 			defer wg.Done()
-			if err := vc.audioService.Generate(ctx, current.text, current.path); err != nil {
+			if err := audioGenerator.Generate(ctx, current.text, current.path); err != nil {
 				errors[jobIndex] = fmt.Errorf("failed to generate narration for slide %s: %w", slideNarrationLabel(slides[current.index]), err)
 				return
 			}

@@ -15,6 +15,7 @@ GoCreator turns local slides plus narration text into narrated videos from the c
 - Translates narration into multiple output languages
 - Generates text-to-speech audio or uses prerecorded narration
 - Renders per-slide video segments and combines them into final outputs
+- Applies optional post-processing such as voice overrides, subtitles, audio mixing, intro/outro clips, exports, metadata, chapters, and thumbnails
 - Caches translations, audio, video segments, and PDF preprocessing artifacts
 
 ## Current workflow
@@ -173,18 +174,29 @@ Common flags:
 4. Translate only the slide texts that do not already have a target-language sidecar
 5. Generate TTS only for slides that do not already have a matching audio sidecar
 6. Render one video segment per final slide
-7. Concatenate segments into `data/out/output-<lang>.mp4`
+7. Concatenate segments into a master language render
+8. Optionally post-process with subtitles, music, intro/outro, exports, metadata, chapters, and thumbnails
 
 ## Configuration notes
-
-The config schema is larger than the currently wired runtime.
 
 The main `create` flow actively uses:
 
 - `input.lang`
 - `output.languages`
+- `output.directory`
+- `output.format`
+- `output.quality`
+- `output.formats`
+- `voice`
 - `cache`
+- `encoding`
 - `effects`
+- `audio`
+- `subtitles`
+- `intro`
+- `outro`
+- `metadata`
+- `chapters`
 - `transition`
 - `timing.media_alignment`
 - `multi_view`
@@ -201,7 +213,18 @@ Supported effects in the core pipeline are:
 
 Effects are optional. When `effects` is absent, the normal rendering path stays on the lightweight fast path.
 
-Other config sections remain in the schema, but they are not yet part of the core `create` pipeline.
+Optional post-processing features now supported by `create` include:
+
+- per-language TTS voice overrides
+- background music, ducking, and timed sound effects
+- generated `.srt` / `.vtt` subtitles plus optional burn-in
+- intro/outro clips or generated template cards
+- multi-format export (`mp4`, `webm`, `gif`) with encoding presets
+- metadata, chapter markers, and thumbnail generation
+
+When those post-processing sections are absent, `create` keeps the direct fast path and writes the primary video without extra FFmpeg passes.
+
+The config schema is still larger than the runtime surface: `pip` remains declarative only.
 
 ## Examples
 

@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 
+	"gocreator/internal/interfaces"
+
 	"github.com/openai/openai-go/v3"
 	"github.com/stretchr/testify/mock"
 )
@@ -20,6 +22,14 @@ func (m *MockOpenAIClient) ChatCompletion(ctx context.Context, messages []openai
 
 func (m *MockOpenAIClient) GenerateSpeech(ctx context.Context, text string) (io.ReadCloser, error) {
 	args := m.Called(ctx, text)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(io.ReadCloser), args.Error(1)
+}
+
+func (m *MockOpenAIClient) GenerateSpeechWithOptions(ctx context.Context, text string, options interfaces.SpeechOptions) (io.ReadCloser, error) {
+	args := m.Called(ctx, text, options)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

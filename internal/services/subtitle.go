@@ -1,10 +1,8 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"gocreator/internal/config"
@@ -15,15 +13,26 @@ import (
 
 // SubtitleService handles subtitle generation and styling
 type SubtitleService struct {
-	fs     afero.Fs
-	logger interfaces.Logger
+	fs              afero.Fs
+	logger          interfaces.Logger
+	commandExecutor interfaces.CommandExecutor
 }
 
 // NewSubtitleService creates a new subtitle service
 func NewSubtitleService(fs afero.Fs, logger interfaces.Logger) *SubtitleService {
+	return NewSubtitleServiceWithExecutor(fs, logger, nil)
+}
+
+// NewSubtitleServiceWithExecutor creates a new subtitle service with an injected command executor.
+func NewSubtitleServiceWithExecutor(fs afero.Fs, logger interfaces.Logger, executor interfaces.CommandExecutor) *SubtitleService {
+	if executor == nil {
+		executor = newCommandExecutor()
+	}
+
 	return &SubtitleService{
-		fs:     fs,
-		logger: logger,
+		fs:              fs,
+		logger:          logger,
+		commandExecutor: executor,
 	}
 }
 
@@ -78,7 +87,7 @@ func (s *SubtitleService) GenerateVTT(segments []SubtitleSegment, outputPath str
 // BurnSubtitles burns subtitles into video
 func (s *SubtitleService) BurnSubtitles(ctx context.Context, videoPath, subtitlePath, outputPath string, cfg config.SubtitlesConfig) error {
 	style := s.buildSubtitleStyle(cfg.Style)
-	filter := fmt.Sprintf("subtitles=%s:force_style='%s'", subtitlePath, style)
+	filter := fmt.Sprintf("subtitles='%s':force_style='%s'", escapeFFmpegFilterPath(subtitlePath), style)
 
 	args := []string{
 		"-y",
@@ -88,14 +97,11 @@ func (s *SubtitleService) BurnSubtitles(ctx context.Context, videoPath, subtitle
 		outputPath,
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	s.logger.Debug("Burning subtitles", "command", formatCommand("ffmpeg", args...))
 
-	s.logger.Debug("Burning subtitles", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	s.logger.Info("Subtitles burned successfully", "output", outputPath)
@@ -240,14 +246,14 @@ func formatVTTTime(seconds float64) string {
 func colorToASS(color string) string {
 	// Convert common color names to BGR hex for ASS format
 	colorMap := map[string]string{
-		"white":  "FFFFFF",
-		"black":  "000000",
-		"red":    "0000FF",
-		"green":  "00FF00",
-		"blue":   "FF0000",
-		"yellow": "00FFFF",
-		"cyan":   "FFFF00",
-		"magenta":"FF00FF",
+		"white":   "FFFFFF",
+		"black":   "000000",
+		"red":     "0000FF",
+		"green":   "00FF00",
+		"blue":    "FF0000",
+		"yellow":  "00FFFF",
+		"cyan":    "FFFF00",
+		"magenta": "FF00FF",
 	}
 
 	if hex, ok := colorMap[strings.ToLower(color)]; ok {

@@ -1,6 +1,6 @@
-# Advanced GoCreator configuration schema example
-# The create command currently runs against local assets in data/slides.
-# Fields outside the active create pipeline remain here as schema examples.
+# Advanced GoCreator configuration example
+# The create command runs against local assets in data/slides and supports the
+# core render pipeline plus the optional post-processing sections shown below.
 
 input:
   lang: en

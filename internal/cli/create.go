@@ -97,6 +97,10 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 	}
 	cfg.Output.Languages = ensureInputLanguageFirst(cfg.Output.Languages, cfg.Input.Lang)
 
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid configuration: %w", err)
+	}
+
 	// Setup logging
 	slogger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	logger := &interfaces.SlogLogger{Logger: slogger}
@@ -173,6 +177,15 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 		Timing:           cfg.Timing,
 		Effects:          cfg.Effects,
 		MultiView:        &cfg.MultiView,
+		Output:           cfg.Output,
+		Voice:            cfg.Voice,
+		Encoding:         cfg.Encoding,
+		Audio:            cfg.Audio,
+		Subtitles:        cfg.Subtitles,
+		Intro:            cfg.Intro,
+		Outro:            cfg.Outro,
+		Metadata:         cfg.Metadata,
+		Chapters:         cfg.Chapters,
 	}
 
 	// Run video creation

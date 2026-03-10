@@ -80,6 +80,18 @@ type CommandExecutor interface {
 	Run(ctx context.Context, name string, args ...string) (CommandResult, error)
 }
 
+// SpeechOptions describes optional TTS settings for synthesized narration.
+type SpeechOptions struct {
+	Model string
+	Voice string
+	Speed float64
+}
+
+// SpeechSynthesisClient optionally supports per-request speech options.
+type SpeechSynthesisClient interface {
+	GenerateSpeechWithOptions(ctx context.Context, text string, options SpeechOptions) (io.ReadCloser, error)
+}
+
 // OpenAIClient wraps OpenAI client operations
 type OpenAIClient interface {
 	ChatCompletion(ctx context.Context, messages []openai.ChatCompletionMessageParamUnion) (string, error)

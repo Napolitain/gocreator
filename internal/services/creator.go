@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"sync"
 
 	"gocreator/internal/config"
@@ -22,6 +24,15 @@ type VideoCreatorConfig struct {
 	Timing           config.TimingConfig     // Timing and alignment configuration
 	Effects          []config.EffectConfig   // Per-slide visual effects
 	MultiView        *config.MultiViewConfig // Multi-view configuration for split-screen layouts
+	Output           config.OutputConfig
+	Voice            config.VoiceConfig
+	Encoding         config.EncodingConfig
+	Audio            config.AudioConfig
+	Subtitles        config.SubtitlesConfig
+	Intro            config.IntroConfig
+	Outro            config.OutroConfig
+	Metadata         config.MetadataConfig
+	Chapters         config.ChaptersConfig
 }
 
 // VideoCreator orchestrates the video creation process
@@ -33,6 +44,7 @@ type VideoCreator struct {
 	videoService       interfaces.VideoGenerator
 	slideService       interfaces.SlideLoader
 	logger             interfaces.Logger
+	postProcessService *PostProcessService
 }
 
 // NewVideoCreator creates a new video creator
@@ -45,6 +57,24 @@ func NewVideoCreator(
 	slideService interfaces.SlideLoader,
 	logger interfaces.Logger,
 ) *VideoCreator {
+	return NewVideoCreatorWithPostProcessor(fs, textService, translationService, audioService, videoService, slideService, logger, nil)
+}
+
+// NewVideoCreatorWithPostProcessor creates a new video creator with an injected post-processing service.
+func NewVideoCreatorWithPostProcessor(
+	fs afero.Fs,
+	textService interfaces.TextProcessor,
+	translationService interfaces.Translator,
+	audioService interfaces.AudioGenerator,
+	videoService interfaces.VideoGenerator,
+	slideService interfaces.SlideLoader,
+	logger interfaces.Logger,
+	postProcessService *PostProcessService,
+) *VideoCreator {
+	if postProcessService == nil {
+		postProcessService = NewPostProcessService(fs, logger)
+	}
+
 	return &VideoCreator{
 		fs:                 fs,
 		textService:        textService,
@@ -53,6 +83,7 @@ func NewVideoCreator(
 		videoService:       videoService,
 		slideService:       slideService,
 		logger:             logger,
+		postProcessService: postProcessService,
 	}
 }
 
@@ -160,6 +191,13 @@ func (vc *VideoCreator) processLanguage(
 
 	cacheDir := filepath.Join(dataDir, "cache", lang)
 	audioDir := filepath.Join(cacheDir, "audio")
+	outputDir := resolveOutputDir(cfg.RootDir, cfg.Output.Directory)
+	outputBaseName := fmt.Sprintf("output-%s", lang)
+	primaryOutputPath := filepath.Join(outputDir, outputBaseName+"."+primaryOutputExtension(cfg.Output))
+	outputTargetPath := primaryOutputPath
+	if needsPostProcess(cfg, lang) {
+		outputTargetPath = filepath.Join(outputDir, ".temp", outputBaseName+".master.mp4")
+	}
 
 	// Translation stage
 	progress.OnItemStart("Translation", lang)
@@ -180,7 +218,12 @@ func (vc *VideoCreator) processLanguage(
 	// Audio generation stage
 	progress.OnItemStart("Audio Generation", lang)
 	progress.OnItemProgress("Audio Generation", lang, 30, "Resolving narration...")
-	audioPaths, prerecordedCount, generatedCount, err := vc.resolveAudioForLanguage(ctx, cfg.InputLang, lang, slidesDir, slides, texts, audioDir)
+	audioGenerator := vc.audioService
+	if service, ok := vc.audioService.(*AudioService); ok {
+		audioGenerator = service.WithSpeechOptions(resolveSpeechOptions(cfg.Voice, lang))
+	}
+
+	audioPaths, prerecordedCount, generatedCount, err := vc.resolveAudioForLanguage(ctx, audioGenerator, cfg.InputLang, lang, slidesDir, slides, texts, audioDir)
 	if err != nil {
 		progress.OnItemComplete("Audio Generation", lang, false, fmt.Sprintf("Error: %v", err))
 		return fmt.Errorf("audio generation failed: %w", err)
@@ -192,15 +235,118 @@ func (vc *VideoCreator) processLanguage(
 	logger.Info("Generating video")
 	progress.OnItemProgress("Video Assembly", lang, 30, "Assembling video...")
 
-	outputDir := filepath.Join(dataDir, "out")
-	outputPath := filepath.Join(outputDir, fmt.Sprintf("output-%s.mp4", lang))
-
-	if err := vc.videoService.GenerateFromSlides(ctx, slides, audioPaths, outputPath); err != nil {
+	if err := vc.videoService.GenerateFromSlides(ctx, slides, audioPaths, outputTargetPath); err != nil {
 		progress.OnItemComplete("Video Assembly", lang, false, fmt.Sprintf("Error: %v", err))
 		return fmt.Errorf("video generation failed: %w", err)
 	}
 
-	logger.Info("Video created successfully", "path", outputPath)
+	finalOutputPath := outputTargetPath
+	if needsPostProcess(cfg, lang) {
+		result, err := vc.postProcessService.Run(ctx, PostProcessRequest{
+			RootDir:        cfg.RootDir,
+			OutputDir:      outputDir,
+			BaseName:       outputBaseName,
+			Lang:           lang,
+			MasterVideo:    outputTargetPath,
+			Slides:         slides,
+			Texts:          texts,
+			AudioPaths:     audioPaths,
+			MediaAlignment: cfg.Timing.MediaAlignment,
+			Output:         cfg.Output,
+			Encoding:       cfg.Encoding,
+			Audio:          cfg.Audio,
+			Subtitles:      cfg.Subtitles,
+			Intro:          cfg.Intro,
+			Outro:          cfg.Outro,
+			Metadata:       cfg.Metadata,
+			Chapters:       cfg.Chapters,
+		})
+		if err != nil {
+			progress.OnItemComplete("Video Assembly", lang, false, fmt.Sprintf("Error: %v", err))
+			return fmt.Errorf("post-processing failed: %w", err)
+		}
+		finalOutputPath = result.PrimaryOutputPath
+		_ = vc.fs.Remove(outputTargetPath)
+	}
+
+	logger.Info("Video created successfully", "path", finalOutputPath)
 	progress.OnItemComplete("Video Assembly", lang, true, "Video complete")
 	return nil
+}
+
+func resolveSpeechOptions(cfg config.VoiceConfig, lang string) interfaces.SpeechOptions {
+	options := interfaces.SpeechOptions{
+		Model: cfg.Model,
+		Voice: cfg.Voice,
+		Speed: cfg.Speed,
+	}
+	if options.Model == "" {
+		options.Model = "tts-1-hd"
+	}
+	if options.Voice == "" {
+		options.Voice = "alloy"
+	}
+	if options.Speed <= 0 {
+		options.Speed = 1.0
+	}
+
+	if override, ok := cfg.PerLanguage[lang]; ok {
+		if override.Voice != "" {
+			options.Voice = override.Voice
+		}
+		if override.Speed > 0 {
+			options.Speed = override.Speed
+		}
+	}
+
+	return options
+}
+
+func resolveOutputDir(rootDir, configuredDir string) string {
+	if strings.TrimSpace(configuredDir) == "" {
+		return filepath.Join(rootDir, "data", "out")
+	}
+	if filepath.IsAbs(configuredDir) {
+		return filepath.Clean(configuredDir)
+	}
+	return filepath.Clean(filepath.Join(rootDir, configuredDir))
+}
+
+func primaryOutputExtension(output config.OutputConfig) string {
+	formatType := strings.TrimSpace(strings.ToLower(output.Format))
+	if formatType == "" {
+		return "mp4"
+	}
+	return formatExtension(formatType)
+}
+
+func needsPostProcess(cfg VideoCreatorConfig, lang string) bool {
+	if cfg.Intro.Enabled || cfg.Outro.Enabled {
+		return true
+	}
+	if cfg.Audio.BackgroundMusic.Enabled || cfg.Audio.Ducking.Enabled || len(cfg.Audio.SoundEffects) > 0 {
+		return true
+	}
+	if cfg.Subtitles.Enabled && subtitleLanguageEnabled(cfg.Subtitles, lang) {
+		return true
+	}
+	if len(cfg.Output.Formats) > 0 {
+		return true
+	}
+	if formatType := strings.TrimSpace(strings.ToLower(cfg.Output.Format)); formatType != "" && formatType != "mp4" {
+		return true
+	}
+	if quality := strings.TrimSpace(strings.ToLower(cfg.Output.Quality)); quality != "" && quality != "medium" {
+		return true
+	}
+	if !reflect.DeepEqual(cfg.Encoding, config.EncodingConfig{}) && !reflect.DeepEqual(cfg.Encoding, config.DefaultEncodingConfig()) {
+		return true
+	}
+	if !isEmptyMetadata(cfg.Metadata) || cfg.Metadata.Thumbnail.Enabled {
+		return true
+	}
+	if cfg.Chapters.Enabled && len(cfg.Chapters.Markers) > 0 {
+		return true
+	}
+	return false
 }

@@ -1,7 +1,7 @@
-# GoCreator configuration schema example
-# The create command currently uses local slides plus per-slide sidecar text/audio files,
-# along with input.lang, output.languages, cache, transition, and multi_view.
-# Other sections remain in the schema for later wiring.
+# GoCreator configuration example
+# The create command uses local slides plus per-slide sidecar text/audio files,
+# and can optionally apply effects, exports, subtitles, audio mixing,
+# intro/outro, metadata, chapters, and multi-view layout.
 
 input:
   # Input language (required)

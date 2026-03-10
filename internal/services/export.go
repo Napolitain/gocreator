@@ -1,10 +1,13 @@
 package services
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"os/exec"
+	"io"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -16,25 +19,38 @@ import (
 
 // ExportService handles multi-format video export
 type ExportService struct {
-	fs     afero.Fs
-	logger interfaces.Logger
+	fs              afero.Fs
+	logger          interfaces.Logger
+	commandExecutor interfaces.CommandExecutor
 }
 
 // NewExportService creates a new export service
 func NewExportService(fs afero.Fs, logger interfaces.Logger) *ExportService {
+	return NewExportServiceWithExecutor(fs, logger, nil)
+}
+
+// NewExportServiceWithExecutor creates a new export service with an injected command executor.
+func NewExportServiceWithExecutor(fs afero.Fs, logger interfaces.Logger, executor interfaces.CommandExecutor) *ExportService {
+	if executor == nil {
+		executor = newCommandExecutor()
+	}
+
 	return &ExportService{
-		fs:     fs,
-		logger: logger,
+		fs:              fs,
+		logger:          logger,
+		commandExecutor: executor,
 	}
 }
 
-// ExportToFormat exports video to a specific format
-func (s *ExportService) ExportToFormat(ctx context.Context, inputPath, outputPath string, format config.FormatConfig) error {
+// ExportToFormat exports video to a specific format.
+func (s *ExportService) ExportToFormat(ctx context.Context, inputPath, outputPath string, format config.FormatConfig, baseEncoding config.EncodingConfig) error {
+	effectiveEncoding := resolveExportEncoding(format, baseEncoding)
+
 	switch strings.ToLower(format.Type) {
 	case "mp4":
-		return s.exportToMP4(ctx, inputPath, outputPath, format)
+		return s.exportToMP4(ctx, inputPath, outputPath, format, effectiveEncoding)
 	case "webm":
-		return s.exportToWebM(ctx, inputPath, outputPath, format)
+		return s.exportToWebM(ctx, inputPath, outputPath, format, effectiveEncoding)
 	case "gif":
 		return s.exportToGIF(ctx, inputPath, outputPath, format)
 	default:
@@ -42,7 +58,7 @@ func (s *ExportService) ExportToFormat(ctx context.Context, inputPath, outputPat
 	}
 }
 
-func (s *ExportService) exportToMP4(ctx context.Context, inputPath, outputPath string, format config.FormatConfig) error {
+func (s *ExportService) exportToMP4(ctx context.Context, inputPath, outputPath string, format config.FormatConfig, encodingCfg config.EncodingConfig) error {
 	args := []string{"-y", "-i", inputPath}
 
 	// Resolution
@@ -54,24 +70,7 @@ func (s *ExportService) exportToMP4(ctx context.Context, inputPath, outputPath s
 		}
 	}
 
-	// Quality/encoding
-	codec := format.Codec
-	if codec == "" {
-		codec = "libx264"
-	}
-	args = append(args, "-c:v", codec)
-
-	// Add quality preset
-	quality := format.Quality
-	if quality == "" {
-		quality = "medium"
-	}
-	encodingCfg := GetQualityPreset(quality)
-	args = append(args, "-preset", encodingCfg.Video.Preset)
-	args = append(args, "-crf", strconv.Itoa(encodingCfg.Video.CRF))
-
-	// Audio
-	args = append(args, "-c:a", "aac", "-b:a", "192k")
+	args = append(args, NewEncodingService(encodingCfg).BuildAllArgs()...)
 
 	// Output
 	args = append(args, outputPath)
@@ -79,7 +78,7 @@ func (s *ExportService) exportToMP4(ctx context.Context, inputPath, outputPath s
 	return s.runFFmpeg(ctx, args)
 }
 
-func (s *ExportService) exportToWebM(ctx context.Context, inputPath, outputPath string, format config.FormatConfig) error {
+func (s *ExportService) exportToWebM(ctx context.Context, inputPath, outputPath string, format config.FormatConfig, encodingCfg config.EncodingConfig) error {
 	args := []string{"-y", "-i", inputPath}
 
 	// Resolution
@@ -90,17 +89,22 @@ func (s *ExportService) exportToWebM(ctx context.Context, inputPath, outputPath 
 		}
 	}
 
-	// VP9 encoding
-	codec := format.Codec
-	if codec == "" {
-		codec = "libvpx-vp9"
+	if encodingCfg.Video.Codec == "" || strings.HasPrefix(encodingCfg.Video.Codec, "libx26") {
+		encodingCfg.Video.Codec = "libvpx-vp9"
 	}
-	args = append(args, "-c:v", codec)
-	args = append(args, "-crf", "30")
-	args = append(args, "-b:v", "0")
-
-	// Audio
-	args = append(args, "-c:a", "libopus", "-b:a", "128k")
+	if encodingCfg.Video.CRF == 0 {
+		encodingCfg.Video.CRF = 30
+	}
+	if encodingCfg.Video.Bitrate == "" || encodingCfg.Video.Bitrate == "auto" {
+		encodingCfg.Video.Bitrate = "0"
+	}
+	if encodingCfg.Audio.Codec == "" || encodingCfg.Audio.Codec == "aac" {
+		encodingCfg.Audio.Codec = "libopus"
+	}
+	if encodingCfg.Audio.Bitrate == "" {
+		encodingCfg.Audio.Bitrate = "128k"
+	}
+	args = append(args, NewEncodingService(encodingCfg).BuildAllArgs()...)
 
 	// Output
 	args = append(args, outputPath)
@@ -225,17 +229,47 @@ func (s *ExportService) GenerateThumbnail(ctx context.Context, videoPath, output
 }
 
 func (s *ExportService) runFFmpeg(ctx context.Context, args []string) error {
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	s.logger.Debug("Running FFmpeg export", "command", formatCommand("ffmpeg", args...))
 
-	s.logger.Debug("Running FFmpeg export", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	return nil
+}
+
+// MetadataChapter represents a chapter interval to embed in exported video metadata.
+type MetadataChapter struct {
+	StartTime float64
+	EndTime   float64
+	Title     string
+}
+
+// ApplyMetadata copies a video while embedding container metadata and chapter markers.
+func (s *ExportService) ApplyMetadata(ctx context.Context, inputPath, outputPath string, metadata config.MetadataConfig, chapters []MetadataChapter) error {
+	if isEmptyMetadata(metadata) && len(chapters) == 0 {
+		return copyFileWithinFS(s.fs, inputPath, outputPath)
+	}
+
+	ffmetadata := s.buildFFMetadata(metadata, chapters)
+	metadataPath := outputPath + "." + shortHash(outputPath) + ".ffmeta"
+	if err := afero.WriteFile(s.fs, metadataPath, []byte(ffmetadata), 0644); err != nil {
+		return fmt.Errorf("failed to write ffmetadata file: %w", err)
+	}
+	defer func() { _ = s.fs.Remove(metadataPath) }()
+
+	args := []string{
+		"-y",
+		"-i", inputPath,
+		"-i", metadataPath,
+		"-map", "0",
+		"-map_metadata", "1",
+		"-map_chapters", "1",
+		"-c", "copy",
+		outputPath,
+	}
+	return s.runFFmpeg(ctx, args)
 }
 
 func parseResolution(res string) (int, int) {
@@ -252,4 +286,110 @@ func parseResolution(res string) (int, int) {
 	}
 
 	return width, height
+}
+
+func (s *ExportService) buildFFMetadata(metadata config.MetadataConfig, chapters []MetadataChapter) string {
+	var content strings.Builder
+	content.WriteString(";FFMETADATA1\n")
+
+	writeMetadataLine := func(key, value string) {
+		value = strings.ReplaceAll(value, "\\", "\\\\")
+		value = strings.ReplaceAll(value, "\n", "\\\n")
+		value = strings.ReplaceAll(value, ";", "\\;")
+		value = strings.ReplaceAll(value, "#", "\\#")
+		value = strings.ReplaceAll(value, "=", "\\=")
+		content.WriteString(fmt.Sprintf("%s=%s\n", key, value))
+	}
+
+	if metadata.Title != "" {
+		writeMetadataLine("title", metadata.Title)
+	}
+	if metadata.Description != "" {
+		writeMetadataLine("comment", metadata.Description)
+	}
+	if metadata.Author != "" {
+		writeMetadataLine("artist", metadata.Author)
+	}
+	if metadata.Copyright != "" {
+		writeMetadataLine("copyright", metadata.Copyright)
+	}
+	if len(metadata.Tags) > 0 {
+		writeMetadataLine("keywords", strings.Join(metadata.Tags, ","))
+	}
+	if metadata.Category != "" {
+		writeMetadataLine("genre", metadata.Category)
+	}
+	if metadata.Language != "" {
+		writeMetadataLine("language", metadata.Language)
+	}
+
+	for _, chapter := range chapters {
+		if chapter.EndTime <= chapter.StartTime || strings.TrimSpace(chapter.Title) == "" {
+			continue
+		}
+		content.WriteString("[CHAPTER]\n")
+		content.WriteString("TIMEBASE=1/1000\n")
+		content.WriteString(fmt.Sprintf("START=%d\n", int(chapter.StartTime*1000)))
+		content.WriteString(fmt.Sprintf("END=%d\n", int(chapter.EndTime*1000)))
+		writeMetadataLine("title", chapter.Title)
+	}
+
+	return content.String()
+}
+
+func isEmptyMetadata(metadata config.MetadataConfig) bool {
+	return metadata.Title == "" &&
+		metadata.Description == "" &&
+		metadata.Author == "" &&
+		metadata.Copyright == "" &&
+		len(metadata.Tags) == 0 &&
+		metadata.Category == "" &&
+		metadata.Language == ""
+}
+
+func shortHash(input string) string {
+	sum := sha256.Sum256([]byte(input))
+	return hex.EncodeToString(sum[:])[:12]
+}
+
+func copyFileWithinFS(fs afero.Fs, sourcePath, targetPath string) error {
+	source, err := fs.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %w", sourcePath, err)
+	}
+	defer func() { _ = source.Close() }()
+
+	if err := fs.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return fmt.Errorf("failed to create target directory %s: %w", filepath.Dir(targetPath), err)
+	}
+
+	target, err := fs.Create(targetPath)
+	if err != nil {
+		return fmt.Errorf("failed to create target file %s: %w", targetPath, err)
+	}
+	defer func() { _ = target.Close() }()
+
+	if _, err := io.Copy(target, source); err != nil {
+		return fmt.Errorf("failed to copy %s to %s: %w", sourcePath, targetPath, err)
+	}
+
+	return nil
+}
+
+func resolveExportEncoding(format config.FormatConfig, base config.EncodingConfig) config.EncodingConfig {
+	encodingCfg := base
+	if reflect.DeepEqual(encodingCfg, config.EncodingConfig{}) {
+		encodingCfg = config.DefaultEncodingConfig()
+	}
+
+	if format.Quality != "" {
+		encodingCfg = GetQualityPreset(format.Quality)
+	}
+	if format.Codec != "" {
+		encodingCfg.Video.Codec = format.Codec
+	}
+	if format.FPS > 0 {
+		encodingCfg.Video.FPS = format.FPS
+	}
+	return encodingCfg
 }

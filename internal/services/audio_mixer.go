@@ -1,10 +1,8 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"os/exec"
 
 	"gocreator/internal/config"
 	"gocreator/internal/interfaces"
@@ -14,15 +12,26 @@ import (
 
 // AudioMixer handles background music and audio mixing
 type AudioMixer struct {
-	fs     afero.Fs
-	logger interfaces.Logger
+	fs              afero.Fs
+	logger          interfaces.Logger
+	commandExecutor interfaces.CommandExecutor
 }
 
 // NewAudioMixer creates a new audio mixer
 func NewAudioMixer(fs afero.Fs, logger interfaces.Logger) *AudioMixer {
+	return NewAudioMixerWithExecutor(fs, logger, nil)
+}
+
+// NewAudioMixerWithExecutor creates a new audio mixer with an injected command executor.
+func NewAudioMixerWithExecutor(fs afero.Fs, logger interfaces.Logger, executor interfaces.CommandExecutor) *AudioMixer {
+	if executor == nil {
+		executor = newCommandExecutor()
+	}
+
 	return &AudioMixer{
-		fs:     fs,
-		logger: logger,
+		fs:              fs,
+		logger:          logger,
+		commandExecutor: executor,
 	}
 }
 
@@ -53,14 +62,11 @@ func (s *AudioMixer) MixBackgroundMusic(ctx context.Context, videoPath, musicPat
 		outputPath,
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	s.logger.Debug("Mixing background music", "command", formatCommand("ffmpeg", args...))
 
-	s.logger.Debug("Mixing background music", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	s.logger.Info("Background music mixed successfully", "output", outputPath)
@@ -68,6 +74,10 @@ func (s *AudioMixer) MixBackgroundMusic(ctx context.Context, videoPath, musicPat
 }
 
 func (s *AudioMixer) buildMusicFilter(cfg config.BackgroundMusicConfig, videoDuration float64) string {
+	return s.buildMusicInputFilter(cfg, videoDuration) + ";[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]"
+}
+
+func (s *AudioMixer) buildMusicInputFilter(cfg config.BackgroundMusicConfig, videoDuration float64) string {
 	volume := cfg.Volume
 	if volume <= 0 {
 		volume = 0.15 // default
@@ -105,17 +115,16 @@ func (s *AudioMixer) buildMusicFilter(cfg config.BackgroundMusicConfig, videoDur
 	}
 
 	musicFilter += "[music]"
-
-	// Mix original audio with music
-	filterComplex := musicFilter + ";[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]"
-
-	return filterComplex
+	return musicFilter
 }
 
 // AddSoundEffect adds a sound effect at a specific time
 func (s *AudioMixer) AddSoundEffect(ctx context.Context, videoPath, effectPath, outputPath string, delay, volume float64) error {
 	if effectPath == "" {
 		return fmt.Errorf("sound effect path is empty")
+	}
+	if volume <= 0 {
+		volume = 1.0
 	}
 
 	filterComplex := fmt.Sprintf(
@@ -134,14 +143,11 @@ func (s *AudioMixer) AddSoundEffect(ctx context.Context, videoPath, effectPath, 
 		outputPath,
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	s.logger.Debug("Adding sound effect", "command", formatCommand("ffmpeg", args...))
 
-	s.logger.Debug("Adding sound effect", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	s.logger.Info("Sound effect added successfully", "output", outputPath)
@@ -149,15 +155,20 @@ func (s *AudioMixer) AddSoundEffect(ctx context.Context, videoPath, effectPath, 
 }
 
 // ApplyDucking applies audio ducking (reduces music volume during speech)
-func (s *AudioMixer) ApplyDucking(ctx context.Context, videoPath, musicPath, outputPath string, cfg config.DuckingConfig) error {
+func (s *AudioMixer) ApplyDucking(ctx context.Context, videoPath, musicPath, outputPath string, musicCfg config.BackgroundMusicConfig, cfg config.DuckingConfig) error {
 	if !cfg.Enabled {
 		return nil
 	}
 
+	duration, err := s.getVideoDuration(videoPath)
+	if err != nil {
+		return fmt.Errorf("failed to get video duration: %w", err)
+	}
+
 	// Side-chain compression filter
 	filterComplex := fmt.Sprintf(
-		"[1:a]volume=0.2[music];[0:a]asplit=2[speech][sc];[music][sc]sidechaincompress=threshold=%.2f:ratio=%.2f:attack=%.2f:release=%.2f[compressed];[speech][compressed]amix=inputs=2:duration=first[a]",
-		cfg.Threshold/100.0, 1.0/cfg.Ratio, cfg.Attack, cfg.Release,
+		"%s;[0:a]asplit=2[speech][sc];[music][sc]sidechaincompress=threshold=%.2f:ratio=%.2f:attack=%.2f:release=%.2f[compressed];[speech][compressed]amix=inputs=2:duration=first:dropout_transition=2[a]",
+		s.buildMusicInputFilter(musicCfg, duration), cfg.Threshold/100.0, duckingRatio(cfg.Ratio), cfg.Attack, cfg.Release,
 	)
 
 	args := []string{
@@ -171,14 +182,11 @@ func (s *AudioMixer) ApplyDucking(ctx context.Context, videoPath, musicPath, out
 		outputPath,
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	s.logger.Debug("Applying audio ducking", "command", formatCommand("ffmpeg", args...))
 
-	s.logger.Debug("Applying audio ducking", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	s.logger.Info("Audio ducking applied successfully", "output", outputPath)
@@ -186,21 +194,29 @@ func (s *AudioMixer) ApplyDucking(ctx context.Context, videoPath, musicPath, out
 }
 
 func (s *AudioMixer) getVideoDuration(videoPath string) (float64, error) {
-	cmd := exec.Command("ffprobe",
+	result, err := s.commandExecutor.Run(context.Background(), "ffprobe",
 		"-v", "error",
 		"-show_entries", "format=duration",
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		videoPath)
-
-	output, err := cmd.Output()
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe error: %w", err)
 	}
 
 	var duration float64
-	if _, err := fmt.Sscanf(string(output), "%f", &duration); err != nil {
+	if _, err := fmt.Sscanf(string(result.Stdout), "%f", &duration); err != nil {
 		return 0, fmt.Errorf("failed to parse duration: %w", err)
 	}
 
 	return duration, nil
+}
+
+func duckingRatio(value float64) float64 {
+	if value <= 0 {
+		return 4.0
+	}
+	if value < 1 {
+		return 1 / value
+	}
+	return value
 }
