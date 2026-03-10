@@ -1,12 +1,10 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -23,6 +21,7 @@ import (
 type VideoService struct {
 	fs               afero.Fs
 	logger           interfaces.Logger
+	commandExecutor  interfaces.CommandExecutor
 	transition       TransitionConfig
 	mediaAlignment   string
 	effects          []config.EffectConfig
@@ -34,12 +33,22 @@ type VideoService struct {
 
 // NewVideoService creates a new video service
 func NewVideoService(fs afero.Fs, logger interfaces.Logger) *VideoService {
+	return NewVideoServiceWithExecutor(fs, logger, nil)
+}
+
+// NewVideoServiceWithExecutor creates a new video service with an injected command executor.
+func NewVideoServiceWithExecutor(fs afero.Fs, logger interfaces.Logger, executor interfaces.CommandExecutor) *VideoService {
+	if executor == nil {
+		executor = newCommandExecutor()
+	}
+
 	return &VideoService{
 		fs:               fs,
 		logger:           logger,
+		commandExecutor:  executor,
 		transition:       TransitionConfig{Type: TransitionNone}, // Default: no transitions
 		mediaAlignment:   config.MediaAlignmentVideo,
-		effectService:    NewEffectService(fs, logger),
+		effectService:    NewEffectServiceWithExecutor(fs, logger, executor),
 		overlayService:   NewOverlayService(),
 		multiViewService: NewMultiViewService(fs, logger),
 	}
@@ -273,15 +282,11 @@ func (s *VideoService) generateSingleVideo(
 		return err
 	}
 
-	cmd := exec.Command("ffmpeg", args...)
+	s.logger.Debug("Running ffmpeg", "command", formatCommand("ffmpeg", args...))
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	s.logger.Debug("Running ffmpeg", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	// Save segment hash for future cache hits
@@ -432,14 +437,11 @@ func (s *VideoService) concatenateVideosSimple(videoFiles []string, outputPath s
 	args = append(args, "-filter_complex", filterComplex.String())
 	args = append(args, "-map", "[outv]", "-map", "[outa]", outputPath)
 
-	cmd := exec.Command("ffmpeg", args...)
-	s.logger.Debug("Concatenating videos (no transitions)", "command", cmd.String())
+	s.logger.Debug("Concatenating videos (no transitions)", "command", formatCommand("ffmpeg", args...))
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg concat error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(context.Background(), "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg concat error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	return nil
@@ -526,30 +528,26 @@ func (s *VideoService) concatenateVideosWithTransitions(videoFiles []string, out
 	args = append(args, "-filter_complex", fullFilter)
 	args = append(args, "-map", finalVideoLabel, "-map", "[outa]", outputPath)
 
-	cmd := exec.Command("ffmpeg", args...)
 	s.logger.Debug("Concatenating videos with transitions",
 		"transition", transitionName,
 		"duration", transitionDuration,
-		"command", cmd.String())
+		"command", formatCommand("ffmpeg", args...))
 
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg concat with transitions error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(context.Background(), "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg concat with transitions error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	return nil
 }
 
 func (s *VideoService) getMediaDimensions(mediaPath string) (int, int, error) {
-	cmd := exec.Command("ffmpeg", "-i", mediaPath, "-vf", "scale", "-vframes", "1", "-f", "null", "-")
-	output, err := cmd.CombinedOutput()
+	result, err := s.commandExecutor.Run(context.Background(), "ffmpeg", "-i", mediaPath, "-vf", "scale", "-vframes", "1", "-f", "null", "-")
 	if err != nil {
 		return 0, 0, fmt.Errorf("ffmpeg dimension check failed: %w", err)
 	}
 
-	outputStr := string(output)
+	outputStr := string(result.CombinedOutput())
 	re := regexp.MustCompile(`(\d+)x(\d+)`)
 	matches := re.FindStringSubmatch(outputStr)
 	if len(matches) < 3 {
@@ -566,14 +564,13 @@ func (s *VideoService) getMediaDimensions(mediaPath string) (int, int, error) {
 
 // isVideoFile checks if a file is a video (not a static image)
 func (s *VideoService) isVideoFile(filePath string) (bool, error) {
-	cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
+	result, err := s.commandExecutor.Run(context.Background(), "ffprobe", "-v", "error", "-select_streams", "v:0",
 		"-show_entries", "stream=codec_type,duration", "-of", "default=noprint_wrappers=1", filePath)
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false, fmt.Errorf("ffprobe check failed: %w", err)
 	}
 
-	outputStr := string(output)
+	outputStr := string(result.CombinedOutput())
 
 	var hasVideoCodec bool
 	var duration float64
@@ -598,14 +595,13 @@ func (s *VideoService) isVideoFile(filePath string) (bool, error) {
 }
 
 func (s *VideoService) hasAudioStream(filePath string) (bool, error) {
-	cmd := exec.Command("ffprobe", "-v", "error",
+	result, err := s.commandExecutor.Run(context.Background(), "ffprobe", "-v", "error",
 		"-show_entries", "stream=codec_type", "-of", "default=noprint_wrappers=1:nokey=1", filePath)
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false, fmt.Errorf("ffprobe audio stream check failed: %w", err)
 	}
 
-	for _, line := range strings.Split(string(output), "\n") {
+	for _, line := range strings.Split(string(result.CombinedOutput()), "\n") {
 		if strings.TrimSpace(line) == "audio" {
 			return true, nil
 		}
@@ -616,15 +612,14 @@ func (s *VideoService) hasAudioStream(filePath string) (bool, error) {
 
 // getVideoDuration gets the duration of a video file in seconds
 func (s *VideoService) getVideoDuration(videoPath string) (float64, error) {
-	cmd := exec.Command("ffprobe", "-v", "error", "-show_entries",
+	result, err := s.commandExecutor.Run(context.Background(), "ffprobe", "-v", "error", "-show_entries",
 		"format=duration", "-of", "default=noprint_wrappers=1:nokey=1", videoPath)
-	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe duration check failed: %w", err)
 	}
 
 	var duration float64
-	if _, err := fmt.Sscanf(strings.TrimSpace(string(output)), "%f", &duration); err != nil {
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(result.CombinedOutput())), "%f", &duration); err != nil {
 		return 0, fmt.Errorf("failed to parse duration: %w", err)
 	}
 

@@ -1,11 +1,9 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
-	"os/exec"
 	"time"
 
 	"gocreator/internal/config"
@@ -16,15 +14,26 @@ import (
 
 // EffectService handles visual effects
 type EffectService struct {
-	fs     afero.Fs
-	logger interfaces.Logger
+	fs              afero.Fs
+	logger          interfaces.Logger
+	commandExecutor interfaces.CommandExecutor
 }
 
 // NewEffectService creates a new effect service
 func NewEffectService(fs afero.Fs, logger interfaces.Logger) *EffectService {
+	return NewEffectServiceWithExecutor(fs, logger, nil)
+}
+
+// NewEffectServiceWithExecutor creates a new effect service with an injected command executor.
+func NewEffectServiceWithExecutor(fs afero.Fs, logger interfaces.Logger, executor interfaces.CommandExecutor) *EffectService {
+	if executor == nil {
+		executor = newCommandExecutor()
+	}
+
 	return &EffectService{
-		fs:     fs,
-		logger: logger,
+		fs:              fs,
+		logger:          logger,
+		commandExecutor: executor,
 	}
 }
 
@@ -43,14 +52,11 @@ func (s *EffectService) ApplyKenBurns(ctx context.Context, imagePath, outputPath
 		outputPath,
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	s.logger.Debug("Applying Ken Burns effect", "command", formatCommand("ffmpeg", args...))
 
-	s.logger.Debug("Applying Ken Burns effect", "command", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg error: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	s.logger.Info("Ken Burns effect applied", "output", outputPath)

@@ -1,12 +1,10 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -279,18 +277,15 @@ func (s *VideoService) runStabilizationDetect(
 		"-",
 	}
 
-	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
 	s.logger.Debug("Running stabilization detection",
 		"slide", slidePath,
 		"smoothing", effect.Config.Smoothing,
-		"command", cmd.String(),
+		"command", formatCommand("ffmpeg", args...),
 	)
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg stabilization detection failed: %w, stderr: %s", err, stderr.String())
+	result, err := s.commandExecutor.Run(ctx, "ffmpeg", args...)
+	if err != nil {
+		return fmt.Errorf("ffmpeg stabilization detection failed: %w, stderr: %s", err, string(result.Stderr))
 	}
 
 	return nil
