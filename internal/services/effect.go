@@ -59,6 +59,11 @@ func (s *EffectService) ApplyKenBurns(ctx context.Context, imagePath, outputPath
 
 // BuildKenBurnsFilter builds the zoompan filter for Ken Burns effect
 func (s *EffectService) BuildKenBurnsFilter(cfg config.EffectConfig, duration float64) string {
+	return s.BuildKenBurnsFilterForOutput(cfg, duration, 1920, 1080)
+}
+
+// BuildKenBurnsFilterForOutput builds the zoompan filter for a specific output size.
+func (s *EffectService) BuildKenBurnsFilterForOutput(cfg config.EffectConfig, duration float64, width, height int) string {
 	zoomStart := cfg.Config.ZoomStart
 	if zoomStart <= 0 {
 		zoomStart = 1.0
@@ -80,16 +85,24 @@ func (s *EffectService) BuildKenBurnsFilter(cfg config.EffectConfig, duration fl
 	xExpr, yExpr := s.getPanExpressions(direction)
 
 	// Calculate zoom increment per frame
+	if duration <= 0 {
+		duration = 1
+	}
 	frames := int(duration * 30) // 30 fps
+	if frames < 1 {
+		frames = 1
+	}
 
 	filter := fmt.Sprintf(
-		"zoompan=z='if(lte(zoom,%.2f),zoom+%.5f,%.2f)':d=%d:x='%s':y='%s':s=1920x1080:fps=30",
+		"zoompan=z='if(lte(zoom,%.2f),zoom+%.5f,%.2f)':d=%d:x='%s':y='%s':s=%dx%d:fps=30",
 		zoomEnd,
 		(zoomEnd-zoomStart)/float64(frames),
 		zoomEnd,
 		frames,
 		xExpr,
 		yExpr,
+		width,
+		height,
 	)
 
 	return filter
@@ -125,11 +138,20 @@ func (s *EffectService) getPanExpressions(direction string) (string, string) {
 // BuildColorGradeFilter builds color grading filter
 func (s *EffectService) BuildColorGradeFilter(cfg config.EffectConfig) string {
 	parts := []string{}
+	brightness := cfg.Config.Brightness
+	contrast := cfg.Config.Contrast
+	if contrast <= 0 {
+		contrast = 1.0
+	}
+	saturation := cfg.Config.Saturation
+	if saturation <= 0 {
+		saturation = 1.0
+	}
 
 	// Brightness, contrast, saturation
-	if cfg.Config.Brightness != 0 || cfg.Config.Contrast != 1.0 || cfg.Config.Saturation != 1.0 {
+	if brightness != 0 || contrast != 1.0 || saturation != 1.0 {
 		eq := fmt.Sprintf("eq=brightness=%.2f:contrast=%.2f:saturation=%.2f",
-			cfg.Config.Brightness, cfg.Config.Contrast, cfg.Config.Saturation)
+			brightness, contrast, saturation)
 		parts = append(parts, eq)
 	}
 
@@ -139,8 +161,12 @@ func (s *EffectService) BuildColorGradeFilter(cfg config.EffectConfig) string {
 	}
 
 	// Gamma
-	if cfg.Config.Gamma != 0 && cfg.Config.Gamma != 1.0 {
-		parts = append(parts, fmt.Sprintf("eq=gamma=%.2f", cfg.Config.Gamma))
+	gamma := cfg.Config.Gamma
+	if gamma <= 0 {
+		gamma = 1.0
+	}
+	if gamma != 1.0 {
+		parts = append(parts, fmt.Sprintf("eq=gamma=%.2f", gamma))
 	}
 
 	if len(parts) == 0 {
@@ -200,12 +226,15 @@ func (s *EffectService) BuildBlurBackgroundFilter(cfg config.EffectConfig, targe
 
 // BuildStabilizationFilter builds video stabilization filter
 func (s *EffectService) BuildStabilizationFilter(cfg config.EffectConfig) string {
+	return s.BuildStabilizationFilterWithInput(cfg, "transforms.trf")
+}
+
+// BuildStabilizationFilterWithInput builds the stabilization transform filter for a specific transforms file.
+func (s *EffectService) BuildStabilizationFilterWithInput(cfg config.EffectConfig, transformsPath string) string {
 	smoothing := cfg.Config.Smoothing
 	if smoothing <= 0 {
 		smoothing = 10
 	}
 
-	// Note: Stabilization requires two-pass processing
-	// This returns the transform filter (second pass)
-	return fmt.Sprintf("vidstabtransform=smoothing=%d", smoothing)
+	return fmt.Sprintf("vidstabtransform=input='%s':smoothing=%d", transformsPath, smoothing)
 }

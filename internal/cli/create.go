@@ -171,6 +171,7 @@ func runCreate(inputLang, outputLangs, configFile string, noProgress bool) error
 		ProgressCallback: progressCallback,
 		Transition:       transition,
 		Timing:           cfg.Timing,
+		Effects:          cfg.Effects,
 		MultiView:        &cfg.MultiView,
 	}
 

@@ -184,9 +184,22 @@ The main `create` flow actively uses:
 - `input.lang`
 - `output.languages`
 - `cache`
+- `effects`
 - `transition`
 - `timing.media_alignment`
 - `multi_view`
+
+Supported effects in the core pipeline are:
+
+- `ken-burns` for still-image slides
+- `text-overlay`
+- `blur-background`
+- `color-grade`
+- `vignette`
+- `film-grain`
+- `stabilize` for video slides
+
+Effects are optional. When `effects` is absent, the normal rendering path stays on the lightweight fast path.
 
 Other config sections remain in the schema, but they are not yet part of the core `create` pipeline.
 

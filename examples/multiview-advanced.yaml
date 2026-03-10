@@ -145,15 +145,16 @@ effects:
   # Ken Burns zoom on intro
   - type: ken-burns
     slides: [0]
-    zoom: 1.2
-    duration: 3.0
+    zoom_start: 1.0
+    zoom_end: 1.2
+    direction: center
     
   # Color grading for professional look
   - type: color-grade
     slides: all
     saturation: 1.1
     contrast: 1.05
-    brightness: 1.02
+    brightness: 0.02
     
   # Vignette on key slides
   - type: vignette
@@ -168,7 +169,8 @@ effects:
     font_size: 32
     color: white
     outline_width: 2
-    offset: [40, 40]
+    offset_x: 40
+    offset_y: 40
     
   - type: text-overlay
     slides: 2
@@ -177,7 +179,8 @@ effects:
     font_size: 32
     color: white
     outline_width: 2
-    offset: [40, 40]
+    offset_x: 40
+    offset_y: 40
     
   - type: text-overlay
     slides: 3
@@ -186,7 +189,8 @@ effects:
     font_size: 32
     color: white
     outline_width: 2
-    offset: [40, 40]
+    offset_x: 40
+    offset_y: 40
 
 # Background music with fade
 audio:

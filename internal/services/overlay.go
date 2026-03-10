@@ -17,6 +17,11 @@ func NewOverlayService() *OverlayService {
 
 // BuildTextOverlayFilter builds an FFmpeg drawtext filter
 func (s *OverlayService) BuildTextOverlayFilter(cfg config.EffectConfig) string {
+	return s.BuildTextOverlayFilterWithDuration(cfg, 0)
+}
+
+// BuildTextOverlayFilterWithDuration builds an FFmpeg drawtext filter for a segment duration.
+func (s *OverlayService) BuildTextOverlayFilterWithDuration(cfg config.EffectConfig, duration float64) string {
 	if cfg.Type != "text-overlay" {
 		return ""
 	}
@@ -76,7 +81,7 @@ func (s *OverlayService) BuildTextOverlayFilter(cfg config.EffectConfig) string 
 
 	// Add fade in/out if specified
 	if cfg.Config.FadeIn > 0 || cfg.Config.FadeOut > 0 {
-		filter = s.addTextFade(filter, cfg.Config.FadeIn, cfg.Config.FadeOut)
+		filter = s.addTextFade(filter, cfg.Config.FadeIn, cfg.Config.FadeOut, duration)
 	}
 
 	return filter
@@ -110,11 +115,35 @@ func (s *OverlayService) getPosition(position string, offsetX, offsetY int) (str
 	return x, y
 }
 
-func (s *OverlayService) addTextFade(filter string, fadeIn, fadeOut float64) string {
-	// This would require more complex expression in drawtext
-	// For simplicity, we'll just return the filter as-is
-	// Full implementation would use enable='between(t,0,...)' expressions
-	return filter
+func (s *OverlayService) addTextFade(filter string, fadeIn, fadeOut, duration float64) string {
+	if duration <= 0 {
+		return filter
+	}
+
+	var alphaExpr string
+	switch {
+	case fadeIn > 0 && fadeOut > 0:
+		fadeOutStart := duration - fadeOut
+		if fadeOutStart < fadeIn {
+			fadeOutStart = fadeIn
+		}
+		alphaExpr = fmt.Sprintf(
+			"if(lt(t,%.3f),t/%.3f,if(lt(t,%.3f),1,if(lt(t,%.3f),(%.3f-t)/%.3f,0)))",
+			fadeIn, fadeIn, fadeOutStart, duration, duration, fadeOut,
+		)
+	case fadeIn > 0:
+		alphaExpr = fmt.Sprintf("if(lt(t,%.3f),t/%.3f,1)", fadeIn, fadeIn)
+	case fadeOut > 0:
+		fadeOutStart := duration - fadeOut
+		if fadeOutStart < 0 {
+			fadeOutStart = 0
+		}
+		alphaExpr = fmt.Sprintf("if(lt(t,%.3f),1,if(lt(t,%.3f),(%.3f-t)/%.3f,0))", fadeOutStart, duration, duration, fadeOut)
+	default:
+		return filter
+	}
+
+	return filter + fmt.Sprintf(":alpha='%s'", alphaExpr)
 }
 
 // BuildLogoOverlay builds a logo overlay filter

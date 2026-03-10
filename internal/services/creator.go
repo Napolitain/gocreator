@@ -20,6 +20,7 @@ type VideoCreatorConfig struct {
 	ProgressCallback interfaces.ProgressCallback
 	Transition       TransitionConfig        // Transition configuration for slide transitions
 	Timing           config.TimingConfig     // Timing and alignment configuration
+	Effects          []config.EffectConfig   // Per-slide visual effects
 	MultiView        *config.MultiViewConfig // Multi-view configuration for split-screen layouts
 }
 
@@ -80,6 +81,11 @@ func (vc *VideoCreator) Create(ctx context.Context, cfg VideoCreatorConfig) erro
 			} else if !cfg.Transition.IsEnabled() {
 				vc.logger.Debug("Transitions are disabled", "type", cfg.Transition.Type)
 			}
+		}
+
+		videoService.SetEffects(cfg.Effects)
+		if len(cfg.Effects) > 0 {
+			vc.logger.Info("Effects enabled", "count", len(cfg.Effects))
 		}
 
 		// Configure multi-view if enabled

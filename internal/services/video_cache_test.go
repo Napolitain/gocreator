@@ -22,27 +22,27 @@ func TestVideoService_computeSegmentHash(t *testing.T) {
 	require.NoError(t, afero.WriteFile(fs, audioPath, []byte("audio data"), 0644))
 
 	// Compute hash
-	hash1, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo)
+	hash1, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, hash1)
 
 	// Same inputs should produce same hash
-	hash2, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo)
+	hash2, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 	require.NoError(t, err)
 	assert.Equal(t, hash1, hash2)
 
 	// Different dimensions should produce different hash
-	hash3, err := service.computeSegmentHash(slidePath, audioPath, 1280, 720, config.MediaAlignmentVideo)
+	hash3, err := service.computeSegmentHash(slidePath, audioPath, 1280, 720, config.MediaAlignmentVideo, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash3)
 
 	// Different slide content should produce different hash
 	require.NoError(t, afero.WriteFile(fs, slidePath, []byte("different slide"), 0644))
-	hash4, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo)
+	hash4, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash1, hash4)
 
-	hash5, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentSlide)
+	hash5, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentSlide, nil)
 	require.NoError(t, err)
 	assert.NotEqual(t, hash4, hash5)
 }
@@ -61,29 +61,29 @@ func TestVideoService_checkSegmentCache(t *testing.T) {
 	require.NoError(t, afero.WriteFile(fs, audioPath, []byte("audio data"), 0644))
 
 	t.Run("cache miss when output doesn't exist", func(t *testing.T) {
-		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo)
+		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 		require.NoError(t, err)
 		assert.False(t, cached)
 	})
 
 	t.Run("cache miss when hash file doesn't exist", func(t *testing.T) {
 		require.NoError(t, afero.WriteFile(fs, outputPath, []byte("video data"), 0644))
-		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo)
+		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 		require.NoError(t, err)
 		assert.False(t, cached)
 	})
 
 	t.Run("cache miss when hash doesn't match", func(t *testing.T) {
 		require.NoError(t, afero.WriteFile(fs, outputPath+".hash", []byte("wrong hash"), 0644))
-		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo)
+		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 		require.NoError(t, err)
 		assert.False(t, cached)
 	})
 
 	t.Run("cache hit when hash matches", func(t *testing.T) {
 		// Save correct hash
-		require.NoError(t, service.saveSegmentHash(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo))
-		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo)
+		require.NoError(t, service.saveSegmentHash(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil))
+		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 		require.NoError(t, err)
 		assert.True(t, cached)
 	})
@@ -91,16 +91,16 @@ func TestVideoService_checkSegmentCache(t *testing.T) {
 	t.Run("cache miss when input changes", func(t *testing.T) {
 		// Modify slide
 		require.NoError(t, afero.WriteFile(fs, slidePath, []byte("modified slide"), 0644))
-		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo)
+		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 		require.NoError(t, err)
 		assert.False(t, cached)
 	})
 
 	t.Run("cache miss when media alignment changes", func(t *testing.T) {
 		require.NoError(t, afero.WriteFile(fs, slidePath, []byte("slide data"), 0644))
-		require.NoError(t, service.saveSegmentHash(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo))
+		require.NoError(t, service.saveSegmentHash(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil))
 
-		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentSlide)
+		cached, err := service.checkSegmentCache(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentSlide, nil)
 		require.NoError(t, err)
 		assert.False(t, cached)
 	})
@@ -120,7 +120,7 @@ func TestVideoService_saveSegmentHash(t *testing.T) {
 	require.NoError(t, afero.WriteFile(fs, audioPath, []byte("audio data"), 0644))
 
 	// Save hash
-	err := service.saveSegmentHash(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo)
+	err := service.saveSegmentHash(slidePath, audioPath, outputPath, 1920, 1080, config.MediaAlignmentVideo, nil)
 	require.NoError(t, err)
 
 	// Verify hash file was created
@@ -132,6 +132,27 @@ func TestVideoService_saveSegmentHash(t *testing.T) {
 	hashData, err := afero.ReadFile(fs, outputPath+".hash")
 	require.NoError(t, err)
 	assert.NotEmpty(t, hashData)
+}
+
+func TestVideoService_computeSegmentHash_IncludesEffects(t *testing.T) {
+	fs := afero.NewMemMapFs()
+	logger := &mockLogger{}
+	service := NewVideoService(fs, logger)
+
+	slidePath := "/test/slide.png"
+	audioPath := "/test/audio.mp3"
+	require.NoError(t, afero.WriteFile(fs, slidePath, []byte("slide data"), 0644))
+	require.NoError(t, afero.WriteFile(fs, audioPath, []byte("audio data"), 0644))
+
+	baseHash, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo, nil)
+	require.NoError(t, err)
+
+	effectHash, err := service.computeSegmentHash(slidePath, audioPath, 1920, 1080, config.MediaAlignmentVideo, []config.EffectConfig{
+		{Type: "vignette", Config: config.EffectDetails{Intensity: 0.3}},
+	})
+	require.NoError(t, err)
+
+	require.NotEqual(t, baseHash, effectHash)
 }
 
 func TestVideoService_computeFinalVideoHash(t *testing.T) {

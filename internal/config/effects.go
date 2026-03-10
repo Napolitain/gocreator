@@ -49,24 +49,44 @@ type EffectDetails struct {
 // ParseSlides parses the slides field into a slice of slide indices
 func (e EffectConfig) ParseSlides(totalSlides int) []int {
 	switch v := e.Slides.(type) {
+	case nil:
+		slides := make([]int, totalSlides)
+		for i := range slides {
+			slides[i] = i
+		}
+		return slides
 	case string:
-		if v == "all" {
+		if v == "" || v == "all" {
 			slides := make([]int, totalSlides)
 			for i := range slides {
 				slides[i] = i
 			}
 			return slides
 		}
+		return parseRange(v, totalSlides)
+	case int:
+		if v >= 0 && v < totalSlides {
+			return []int{v}
+		}
+		return nil
 	case []interface{}:
 		slides := make([]int, 0, len(v))
 		for _, item := range v {
 			if num, ok := item.(int); ok {
-				slides = append(slides, num)
+				if num >= 0 && num < totalSlides {
+					slides = append(slides, num)
+				}
 			}
 		}
 		return slides
 	case []int:
-		return v
+		slides := make([]int, 0, len(v))
+		for _, num := range v {
+			if num >= 0 && num < totalSlides {
+				slides = append(slides, num)
+			}
+		}
+		return slides
 	}
 	return nil
 }

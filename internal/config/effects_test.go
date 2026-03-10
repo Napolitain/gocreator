@@ -14,10 +14,28 @@ func TestEffectConfig_ParseSlides(t *testing.T) {
 		expected    []int
 	}{
 		{
+			name:        "nil slides applies to all slides",
+			slides:      nil,
+			totalSlides: 4,
+			expected:    []int{0, 1, 2, 3},
+		},
+		{
 			name:        "all slides",
 			slides:      "all",
 			totalSlides: 5,
 			expected:    []int{0, 1, 2, 3, 4},
+		},
+		{
+			name:        "range of slides",
+			slides:      "1-3",
+			totalSlides: 5,
+			expected:    []int{1, 2, 3},
+		},
+		{
+			name:        "single slide as int",
+			slides:      3,
+			totalSlides: 10,
+			expected:    []int{3},
 		},
 		{
 			name:        "specific slides as []interface{}",
@@ -39,19 +57,19 @@ func TestEffectConfig_ParseSlides(t *testing.T) {
 		},
 		{
 			name:        "invalid type",
-			slides:      123,
+			slides:      123.5,
 			totalSlides: 5,
 			expected:    nil,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			effect := EffectConfig{
 				Type:   "test-effect",
 				Slides: tt.slides,
 			}
-			
+
 			result := effect.ParseSlides(tt.totalSlides)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -64,23 +82,23 @@ func FuzzEffectConfig_ParseSlides(f *testing.F) {
 	f.Add(10)
 	f.Add(100)
 	f.Add(0)
-	
+
 	f.Fuzz(func(t *testing.T, totalSlides int) {
 		if totalSlides < 0 {
 			return
 		}
-		
+
 		effect := EffectConfig{
 			Type:   "test",
 			Slides: "all",
 		}
-		
+
 		result := effect.ParseSlides(totalSlides)
-		
+
 		// Should return expected number of slides
 		if totalSlides > 0 {
 			assert.Len(t, result, totalSlides)
-			
+
 			// Should have correct values
 			for i, slideIdx := range result {
 				assert.Equal(t, i, slideIdx)
